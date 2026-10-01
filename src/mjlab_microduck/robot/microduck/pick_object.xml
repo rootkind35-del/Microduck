@@ -1,0 +1,12 @@
+<mujoco model="pick_object">
+    <asset>
+        <material name="pick_object_mat" rgba="1.0 0.75 0.1 1.0" reflectance="0.3" roughness="0.4"/>
+    </asset>
+    <worldbody>
+        <body name="pick_object" pos="0.09 0 0.010">
+            <freejoint name="pick_object_joint"/>
+            <geom name="pick_object_geom" type="box" size="0.012 0.012 0.010" mass="0.012"
+                  material="pick_object_mat" condim="4" friction="1.2 0.01 0.001" solref="0.02 1"/>
+        </body>
+    </worldbody>
+</mujoco>
