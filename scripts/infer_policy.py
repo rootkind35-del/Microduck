@@ -438,6 +438,16 @@ class PolicyInference:
 
         # Velocity command [lin_vel_x, lin_vel_y, ang_vel_z] — controls walking / policy switching
         self.vel_cmd = np.zeros(3, dtype=np.float32)
+        # Closed-loop Heading-Lock & Adaptive Terrain Locomotion
+        self.heading_lock_enabled = True
+        self.target_yaw = None
+        self.heading_kp = 2.0
+        self.auto_slowdown_enabled = True
+        self.nominal_vel_x = 0.0
+        self.nominal_vel_y = 0.0
+        self.nominal_vel_ang = 0.0
+        self.roughness_metric = 0.20
+        self.current_speed_scale = 1.0
         # Key-press step sizes and limits (overridden per mode in main())
         self.vel_step_x = 0.05
         self.vel_step_y = 0.05
@@ -566,12 +576,105 @@ class PolicyInference:
             print(f"Switched to {self.current_policy} policy (vel magnitude: {magnitude:.3f})")
             self._update_command()
 
+    def get_current_yaw(self) -> float:
+        """Calculate current trunk yaw angle in world frame."""
+        qw, qx, qy, qz = self.data.qpos[self._trunk_qpos_adr + 3:self._trunk_qpos_adr + 7]
+        return math.atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
+
     def set_vel_cmd(self, lin_vel_x=0.0, lin_vel_y=0.0, ang_vel_z=0.0):
         """Set velocity command (used for walking / policy switching)."""
-        self.vel_cmd = np.array([lin_vel_x, lin_vel_y, ang_vel_z], dtype=np.float32)
+        self.nominal_vel_x = float(lin_vel_x)
+        self.nominal_vel_y = float(lin_vel_y)
+        self.nominal_vel_ang = float(ang_vel_z)
+
+        # Update Heading Lock target yaw
+        if abs(ang_vel_z) > 0.05:
+            # Active steering by user: disengage target yaw lock
+            self.target_yaw = None
+        elif abs(lin_vel_x) > 0.01:
+            # Walking forward/backward with no active turn command: lock heading
+            if self.target_yaw is None:
+                self.target_yaw = self.get_current_yaw()
+        else:
+            self.target_yaw = None
+
+        effective_vx = self.nominal_vel_x * (self.current_speed_scale if self.auto_slowdown_enabled else 1.0)
+        self.vel_cmd = np.array([effective_vx, self.nominal_vel_y, self.nominal_vel_ang], dtype=np.float32)
         self._update_policy_session()
         self._update_command()
-        print(f"Vel cmd: [{lin_vel_x:.2f}, {lin_vel_y:.2f}, {ang_vel_z:.2f}] [{self.current_policy}]")
+        lock_str = f" [Heading-Lock: {math.degrees(self.target_yaw):.1f}°]" if (self.heading_lock_enabled and self.target_yaw is not None) else ""
+        slow_str = f" [Slow: {self.current_speed_scale*100:.0f}%]" if (self.auto_slowdown_enabled and self.current_speed_scale < 0.98) else ""
+        print(f"Vel cmd: [{effective_vx:.2f}, {lin_vel_y:.2f}, {ang_vel_z:.2f}] [{self.current_policy}]{lock_str}{slow_str}")
+
+    def toggle_heading_lock(self):
+        """Toggle Heading-Lock on/off (C key)."""
+        self.heading_lock_enabled = not self.heading_lock_enabled
+        if not self.heading_lock_enabled:
+            self.target_yaw = None
+        elif abs(self.nominal_vel_x) > 0.01 and abs(self.nominal_vel_ang) <= 0.05:
+            self.target_yaw = self.get_current_yaw()
+        state_str = f"ON (target: {math.degrees(self.target_yaw):.1f}°)" if (self.heading_lock_enabled and self.target_yaw is not None) else ("ON" if self.heading_lock_enabled else "OFF")
+        print(f"Heading-Lock: {state_str}")
+
+    def toggle_auto_slowdown(self):
+        """Toggle Terrain-Adaptive Auto-Deceleration on/off (V key)."""
+        self.auto_slowdown_enabled = not self.auto_slowdown_enabled
+        if not self.auto_slowdown_enabled:
+            self.current_speed_scale = 1.0
+            self.vel_cmd[0] = self.nominal_vel_x
+            self._update_command()
+        print(f"Auto-Slowdown on rough terrain: {'ON' if self.auto_slowdown_enabled else 'OFF'}")
+
+    def update_adaptive_locomotion(self, dt: float):
+        """Update runtime closed-loop Heading-Lock and Terrain-Adaptive Auto-Deceleration."""
+        if self.current_policy != "walking" or self.behavior_mode is not None or self.fetch_mode or self.ground_pick_mode:
+            return
+
+        changed = False
+
+        # 1. Terrain-Adaptive Auto-Deceleration
+        if self.auto_slowdown_enabled and abs(self.nominal_vel_x) > 0.01:
+            ang_vel = self.get_base_ang_vel()
+            w_xy = float(math.hypot(ang_vel[0], ang_vel[1]))
+
+            # Update EMA of roughness
+            alpha = min(1.0, 10.0 * dt)
+            self.roughness_metric = (1.0 - alpha) * self.roughness_metric + alpha * w_xy
+
+            # When roughness > 0.35 rad/s, automatically reduce forward speed
+            if self.roughness_metric > 0.35:
+                excess = min(0.6, self.roughness_metric - 0.35)
+                target_scale = max(0.45, 1.0 - 1.5 * excess)
+            else:
+                target_scale = 1.0
+
+            beta = min(1.0, 4.0 * dt)
+            self.current_speed_scale = (1.0 - beta) * self.current_speed_scale + beta * target_scale
+            effective_vx = self.nominal_vel_x * self.current_speed_scale
+            if abs(self.vel_cmd[0] - effective_vx) > 0.005:
+                self.vel_cmd[0] = effective_vx
+                changed = True
+        else:
+            self.current_speed_scale = 1.0
+            if self.vel_cmd[0] != self.nominal_vel_x:
+                self.vel_cmd[0] = self.nominal_vel_x
+                changed = True
+
+        # 2. Closed-loop Heading-Lock (Absolute Yaw Stabilization)
+        if self.heading_lock_enabled and self.target_yaw is not None and abs(self.nominal_vel_x) > 0.01 and abs(self.nominal_vel_ang) <= 0.05:
+            current_yaw = self.get_current_yaw()
+            yaw_err = (self.target_yaw - current_yaw + np.pi) % (2 * np.pi) - np.pi
+            cmd_wz = float(np.clip(self.heading_kp * yaw_err, -0.85, 0.85))
+            if abs(self.vel_cmd[2] - cmd_wz) > 0.01:
+                self.vel_cmd[2] = cmd_wz
+                changed = True
+        elif abs(self.nominal_vel_ang) > 0.05:
+            if self.vel_cmd[2] != self.nominal_vel_ang:
+                self.vel_cmd[2] = self.nominal_vel_ang
+                changed = True
+
+        if changed:
+            self._update_command()
 
     def toggle_body_pose_mode(self):
         """Toggle body pose control mode on/off."""
@@ -1928,6 +2031,10 @@ def main():
                     print(f"Head offset: neck={policy.head_offset[0]:.2f} pitch={policy.head_offset[1]:.2f} yaw={policy.head_offset[2]:.2f} roll={policy.head_offset[3]:.2f}")
                 elif policy.body_pose_mode and policy.new_cmd_obs:
                     policy.bump_body("yaw", -policy.body_cmd_step_angle)
+            elif key == "c":
+                policy.toggle_heading_lock()
+            elif key == "v":
+                policy.toggle_auto_slowdown()
         except Exception as e:
             print(f"Key press error: {e}")
 
@@ -1942,6 +2049,8 @@ def main():
         print("  LEFT/RIGHT arrow: strafe left/right (lin_vel_y)")
         print("  A / E:            turn left/right (ang_vel_z)")
     print("  SPACE:            coast (zero all commands)")
+    print("  C:                toggle Heading-Lock (giữ tuyệt đối hướng đi thẳng/lùi)")
+    print("  V:                toggle Terrain-Adaptive Auto-Slowdown (tự giảm tốc khi gặp gồ ghề)")
     print("  T:                toggle policy inference on/off (paused = motors hold last target)")
     print("  F:                Auto-Fetch: ném bóng (nếu ở gần/đang giữ), đợi bóng dừng rồi chạy tới gắp về")
     print("  X:                Ném bóng vào sân (toss ball): robot đứng yên đợi bóng dừng rồi đi nhặt")
@@ -2052,6 +2161,7 @@ def main():
                 policy.update_ground_pick_phase(actual_dt)
                 policy.update_behavior(actual_dt)
                 policy.update_fetch(actual_dt)
+                policy.update_adaptive_locomotion(actual_dt)
 
                 if args.auto_toss and control_step_count == int(0.5 / control_dt):
                     print("\n[Auto-Toss] Launching ball from human hand for demo...")

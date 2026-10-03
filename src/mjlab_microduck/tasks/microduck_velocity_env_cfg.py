@@ -348,11 +348,13 @@ def make_microduck_velocity_env_cfg(
     # ramps it -0.1 → -1.0 by iter 1500.
     cfg.rewards["action_rate_l2"].weight = -0.1
 
+    cfg.rewards["foot_clearance"].weight = -3.0
     cfg.rewards["foot_clearance"].params["command_threshold"] = 0.01
-    cfg.rewards["foot_clearance"].params["target_height"] = 0.02  # Increased from 0.01 to penalize dragging
+    cfg.rewards["foot_clearance"].params["target_height"] = 0.035  # 3.5 cm to clear rough terrain / cobblestones / stairs
 
+    cfg.rewards["foot_swing_height"].weight = -1.5
     cfg.rewards["foot_swing_height"].params["command_threshold"] = 0.01
-    cfg.rewards["foot_swing_height"].params["target_height"] = 0.02  # Increased from 0.01 to force foot lifting
+    cfg.rewards["foot_swing_height"].params["target_height"] = 0.035  # 3.5 cm to force high foot swing over obstacles
 
     # NOTE: no neck-only action-rate term — the shared action_rate_l2 sums over
     # ALL action dims (neck included), and head_pose_tracking below gives the
