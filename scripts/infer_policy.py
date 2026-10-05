@@ -2532,6 +2532,9 @@ def main():
                             print("Policy inference enabled (after 1s standby)")
                             print(f"  Restored original kp gains (range: [{original_kp.min():.2f}, {original_kp.max():.2f}])")
 
+                if getattr(args, "auto_toss", False) and control_step_count == int(0.5 / control_dt):
+                    policy.trigger_fetch()
+
                 # Fixed simulation timestep for robot controller and autonomous state machine.
                 # MuJoCo physics steps by exactly control_dt (0.02s) on each control cycle;
                 # using control_dt prevents wall-clock drift, NTP jumps, or rendering lag from warping state timers.
