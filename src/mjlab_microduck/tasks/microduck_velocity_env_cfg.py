@@ -728,6 +728,14 @@ def make_microduck_velocity_env_cfg(
         },
     )
 
+    # Heading hold: prevents yaw drift when going straight or reverse.
+    # While actively commanded to turn, this term automatically unlocks.
+    cfg.rewards["heading_hold"] = RewardTermCfg(
+        func=microduck_mdp.heading_hold_reward,
+        weight=0.5,
+        params={"command_name": "twist", "std": 0.35},
+    )
+
     # Head droop fix (2026-08-20). The head walks pitched ~15° down (measured:
     # run ww1g2198 head_pose_tracking 1.544/2.0 → 14.6° mean joint error).
     # DO NOT fix this by tightening head_pose_tracking's std: run 5yay13u4 tried

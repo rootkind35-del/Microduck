@@ -1,37 +1,86 @@
 <mujoco model="scene_fetch">
-    <!-- Fetch simulation scene: Microduck + ball + human thrower/return zone -->
+    <!-- Fetch simulation scene: Microduck + ball + green checkerboard terrain + trees -->
     <include file="robot_groundcontact.xml" />
     <include file="ball.xml" />
 
     <visual>
-        <headlight diffuse="0.7 0.7 0.7" ambient="0.3 0.3 0.3" specular="0.1 0.1 0.1" />
-        <rgba haze="0.15 0.25 0.35 1" />
+        <headlight diffuse="0.75 0.75 0.75" ambient="0.35 0.35 0.35" specular="0.1 0.1 0.1" />
+        <rgba haze="0.45 0.70 0.90 1" />
         <global azimuth="150" elevation="-25" />
     </visual>
 
     <asset>
-        <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072" />
-        <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3" markrgb="0.8 0.8 0.8" width="300" height="300" />
-        <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2" />
-        <material name="zone_mat" rgba="0.1 0.8 0.3 0.35" />
+        <!-- Sunny sky gradient -->
+        <texture type="skybox" builtin="gradient" rgb1="0.45 0.72 0.98" rgb2="0.82 0.92 1.0" width="512" height="3072" />
+        <!-- Vibrant green checkerboard grass terrain (matching reference video) -->
+        <texture type="2d" name="grass_checker" builtin="checker" mark="none" rgb1="0.44 0.76 0.30" rgb2="0.34 0.64 0.22" width="300" height="300" />
+        <material name="grass_mat" texture="grass_checker" texuniform="true" texrepeat="16 16" reflectance="0.06" />
+        <material name="zone_mat" rgba="0.1 0.85 0.3 0.35" />
         <material name="hand_mat" rgba="0.95 0.75 0.6 0.95" />
         <material name="arm_mat" rgba="0.2 0.4 0.8 0.9" />
+        <material name="tree_wood" rgba="0.48 0.30 0.16 1" />
+        <material name="tree_leaves" rgba="0.24 0.62 0.20 1" />
+        <material name="tree_leaves_dark" rgba="0.18 0.52 0.15 1" />
     </asset>
 
     <worldbody>
         <light pos="0 0 3.5" dir="0 0 -1" directional="true" />
-        <geom name="floor" size="0 0 0.05" pos="0 0 0" type="plane" material="groundplane" />
+        <!-- Green checkerboard ground floor -->
+        <geom name="floor" size="0 0 0.05" pos="0 0 0" type="plane" material="grass_mat" />
 
-        <!-- Human Thrower & Return Target Zone (standing beside the robot) -->
-        <body name="human_zone" pos="-0.4 0.28 0">
-            <!-- Floor drop zone marker -->
-            <geom name="zone_marker" type="cylinder" size="0.22 0.001" pos="0 0 0.001" material="zone_mat" contype="0" conaffinity="0" />
-            <!-- Human torso stand representation -->
-            <geom name="human_stand" type="cylinder" size="0.05 0.22" pos="0 0 0.22" rgba="0.25 0.35 0.45 0.7" contype="0" conaffinity="0" />
-            <!-- Human arm & hand representation extending forward -->
-            <geom name="human_arm" type="capsule" fromto="0 0 0.38 0.18 -0.05 0.34" size="0.025" material="arm_mat" contype="0" conaffinity="0" />
-            <geom name="human_hand" type="sphere" size="0.035" pos="0.20 -0.05 0.34" material="hand_mat" contype="0" conaffinity="0" />
+        <!-- Human Thrower & Return Target Zone (drop zone marker) -->
+        <body name="human_zone" pos="-0.22 0.22 0">
+            <geom name="zone_marker" type="cylinder" size="0.25 0.001" pos="0 0 0.001" material="zone_mat" contype="0" conaffinity="0" />
+        </body>
+
+        <!-- Realistic 3D Human Hand & Arm (kinematic mocap for lifting and tossing animation) -->
+        <body name="human_hand" mocap="true" pos="-0.20 0.20 0.30">
+            <geom name="human_hand" type="box" size="0.032 0.038 0.012" material="hand_mat" contype="0" conaffinity="0" />
+            <geom name="thumb_base" type="capsule" fromto="0.015 -0.028 0.005 0.035 -0.042 0.018" size="0.009" material="hand_mat" contype="0" conaffinity="0" />
+            <geom name="thumb_tip" type="capsule" fromto="0.035 -0.042 0.018 0.048 -0.035 0.025" size="0.008" material="hand_mat" contype="0" conaffinity="0" />
+            <geom name="finger_idx" type="capsule" fromto="0.030 -0.022 0 0.062 -0.022 0.022" size="0.008" material="hand_mat" contype="0" conaffinity="0" />
+            <geom name="finger_mid" type="capsule" fromto="0.032 -0.002 0 0.068 -0.002 0.024" size="0.008" material="hand_mat" contype="0" conaffinity="0" />
+            <geom name="finger_rng" type="capsule" fromto="0.030 0.018 0 0.064 0.018 0.022" size="0.0075" material="hand_mat" contype="0" conaffinity="0" />
+            <geom name="finger_pnk" type="capsule" fromto="0.028 0.035 0 0.055 0.035 0.018" size="0.007" material="hand_mat" contype="0" conaffinity="0" />
+            <geom name="wrist" type="cylinder" size="0.024 0.015" pos="-0.035 0 0" quat="0.7071 0 0.7071 0" material="hand_mat" contype="0" conaffinity="0" />
+            <geom name="forearm" type="capsule" fromto="-0.045 0 0 -0.25 0.05 0.08" size="0.026" material="arm_mat" contype="0" conaffinity="0" />
+        </body>
+
+        <!-- Ambient Trees in the background (as in reference demo image) -->
+        <body name="tree_1" pos="1.2 1.4 0">
+            <geom name="trunk_1" type="cylinder" size="0.06 0.35" pos="0 0 0.35" material="tree_wood" contype="0" conaffinity="0" />
+            <geom name="foliage_1" type="sphere" size="0.36" pos="0 0 0.85" material="tree_leaves" contype="0" conaffinity="0" />
+            <geom name="foliage_1_top" type="sphere" size="0.26" pos="0 0 1.05" material="tree_leaves_dark" contype="0" conaffinity="0" />
+        </body>
+        <body name="tree_2" pos="-1.4 1.6 0">
+            <geom name="trunk_2" type="cylinder" size="0.07 0.38" pos="0 0 0.38" material="tree_wood" contype="0" conaffinity="0" />
+            <geom name="foliage_2" type="sphere" size="0.38" pos="0 0 0.90" material="tree_leaves_dark" contype="0" conaffinity="0" />
+            <geom name="foliage_2_top" type="sphere" size="0.28" pos="0 0 1.12" material="tree_leaves" contype="0" conaffinity="0" />
+        </body>
+        <body name="tree_3" pos="-1.8 -1.2 0">
+            <geom name="trunk_3" type="cylinder" size="0.06 0.35" pos="0 0 0.35" material="tree_wood" contype="0" conaffinity="0" />
+            <geom name="foliage_3" type="sphere" size="0.35" pos="0 0 0.82" material="tree_leaves" contype="0" conaffinity="0" />
+        </body>
+        <body name="tree_4" pos="1.6 -1.5 0">
+            <geom name="trunk_4" type="cylinder" size="0.07 0.40" pos="0 0 0.40" material="tree_wood" contype="0" conaffinity="0" />
+            <geom name="foliage_4" type="sphere" size="0.40" pos="0 0 0.95" material="tree_leaves" contype="0" conaffinity="0" />
+            <geom name="foliage_4_top" type="sphere" size="0.28" pos="0 0 1.18" material="tree_leaves_dark" contype="0" conaffinity="0" />
+        </body>
+        <body name="tree_5" pos="0.3 2.4 0">
+            <geom name="trunk_5" type="cylinder" size="0.07 0.42" pos="0 0 0.42" material="tree_wood" contype="0" conaffinity="0" />
+            <geom name="foliage_5" type="sphere" size="0.42" pos="0 0 1.00" material="tree_leaves" contype="0" conaffinity="0" />
+            <geom name="foliage_5_top" type="sphere" size="0.28" pos="0 0 1.25" material="tree_leaves_dark" contype="0" conaffinity="0" />
+        </body>
+
+        <!-- Ambient scattered orange balls (as seen in demo video) -->
+        <body name="ball_scatter_1" pos="0.65 -0.45 0.035">
+            <geom type="sphere" name="ball_scatter_1_geom" size="0.035" rgba="1 0.55 0 1" contype="0" conaffinity="0" />
+        </body>
+        <body name="ball_scatter_2" pos="-0.55 -0.50 0.035">
+            <geom type="sphere" name="ball_scatter_2_geom" size="0.035" rgba="1 0.55 0 1" contype="0" conaffinity="0" />
+        </body>
+        <body name="ball_scatter_3" pos="0.30 0.80 0.035">
+            <geom type="sphere" name="ball_scatter_3_geom" size="0.035" rgba="1 0.55 0 1" contype="0" conaffinity="0" />
         </body>
     </worldbody>
 </mujoco>
-

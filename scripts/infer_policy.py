@@ -32,6 +32,8 @@ MICRODUCK_XML = "src/mjlab_microduck/robot/microduck/scene.xml"
 MICRODUCK_ROLLERS_XML = "src/mjlab_microduck/robot/microduck/scene_rollers.xml"
 MICRODUCK_BALL_XML = "src/mjlab_microduck/robot/microduck/scene_ball.xml"
 MICRODUCK_INTERACTIVE_XML = "src/mjlab_microduck/robot/microduck/scene_interactive.xml"
+MICRODUCK_ROUGH_XML = "src/mjlab_microduck/robot/microduck/scene_rough.xml"
+MICRODUCK_FETCH_XML = "src/mjlab_microduck/robot/microduck/scene_fetch.xml"
 
 # BAM M6 defaults — MUST mirror `_BAM_ACTUATOR_KWARGS` in
 # src/mjlab_microduck/robot/microduck_constants.py (the actuator every policy is
@@ -173,7 +175,12 @@ class TerminalInput:
             print("WARNING: stdin is not a TTY — keyboard control disabled")
             return self
         self._old_attrs = termios.tcgetattr(self._fd)
-        tty.setcbreak(self._fd)
+        # Custom cbreak: disable ICANON and ECHO, but keep ISIG so Ctrl+C works instantly
+        new_attrs = termios.tcgetattr(self._fd)
+        new_attrs[3] = new_attrs[3] & ~(termios.ICANON | termios.ECHO)
+        new_attrs[6][termios.VMIN] = 0
+        new_attrs[6][termios.VTIME] = 0
+        termios.tcsetattr(self._fd, termios.TCSANOW, new_attrs)
         threading.Thread(target=self._reader, daemon=True).start()
         return self
 
@@ -182,50 +189,67 @@ class TerminalInput:
         if self._old_attrs is not None:
             termios.tcsetattr(self._fd, termios.TCSADRAIN, self._old_attrs)
 
-    def _read1(self, timeout):
-        """Read one byte from stdin, or None on timeout. os.read (unbuffered):
-        buffered sys.stdin.read would swallow escape-sequence bytes past what
-        select reported ready."""
-        r, _, _ = select.select([self._fd], [], [], timeout)
-        if not r:
-            return None
-        data = os.read(self._fd, 1)
-        return data.decode(errors="ignore") if data else None
-
     def _reader(self):
         while not self._stop.is_set():
-            ch = self._read1(0.1)
-            if not ch:
+            r, _, _ = select.select([self._fd], [], [], 0.02)
+            if not r or self._stop.is_set():
                 continue
-            if ch == "\x1b":  # possible arrow-key escape sequence
-                nxt = self._read1(0.15)
-                if nxt in ("[", "O"):
-                    final = self._read1(0.15)
-                    name = self._ARROWS.get(final) if final else None
-                    if name:
-                        self._queue.put(name)
-                continue  # bare ESC / unknown sequence: ignore
-            self._queue.put(ch.lower() if ch.isalpha() else ch)
+            try:
+                data = os.read(self._fd, 128)
+            except (OSError, ValueError):
+                continue
+            if not data:
+                continue
+            text = data.decode(errors="ignore")
+            i = 0
+            n = len(text)
+            while i < n:
+                if text[i] == "\x1b":
+                    # Check for arrow key sequence: \x1b[A, \x1b[B, \x1b[C, \x1b[D or \x1bOA...
+                    if i + 2 < n and text[i+1] in ("[", "O") and text[i+2] in self._ARROWS:
+                        self._queue.put(self._ARROWS[text[i+2]])
+                        i += 3
+                    elif i + 1 < n and text[i+1] == "\x1b":
+                        i += 1  # double ESC
+                    else:
+                        i += 1  # stray ESC
+                else:
+                    ch = text[i]
+                    if ch.isalpha():
+                        self._queue.put(ch.lower())
+                    elif ch in (" ", "\n", "\r"):
+                        self._queue.put(" ")
+                    else:
+                        self._queue.put(ch)
+                    i += 1
 
     def put_key(self, key):
         """Enqueue a key from another source (e.g. viewer key_callback)."""
         self._queue.put(key)
 
     def get_keys(self):
-        """Drain and return all pending keys (symbolic names / characters)."""
+        """Drain and return all pending keys, deduplicating consecutive identical arrow keys."""
         keys = []
         while True:
             try:
                 keys.append(self._queue.get_nowait())
             except queue.Empty:
-                return keys
+                break
+        if not keys:
+            return keys
+        # If queue was flooded with repeated arrow keys, collapse to latest
+        collapsed = []
+        for k in keys:
+            if not collapsed or k != collapsed[-1] or k not in ("up", "down", "left", "right"):
+                collapsed.append(k)
+        return collapsed
 
 
 class PolicyInference:
     def __init__(self, model, data, walking_onnx_path=None, action_scale=1.0, bam_ctrl=None,
                  delay_min_lag=0, delay_max_lag=0,
                  standing_onnx_path=None, switch_threshold=0.05,
-                 use_projected_gravity=False, ground_pick_onnx_path=None, ground_pick_period=4.0,
+                 use_projected_gravity=False, ground_pick_onnx_path=None, ground_pick_period=2.8,
                  sit_onnx_path=None, new_cmd_obs=False, slope_onnx_path=None,
                  sitstand_onnx_path=None,
                  kick_left_onnx_path=None, kick_right_onnx_path=None,
@@ -246,12 +270,42 @@ class PolicyInference:
         # When False: legacy behaviour (3D command, head_offset added to ctrl[5:9]).
         self.new_cmd_obs = new_cmd_obs
 
+        def _create_optimized_ort_session(path: str, desc: str = "Policy"):
+            """Load ONNX policy with optimized single-thread runtime options and warmup pass."""
+            if not path or not os.path.exists(path):
+                raise FileNotFoundError(f"{desc} file not found: {path}")
+            opts = ort.SessionOptions()
+            opts.intra_op_num_threads = 1
+            opts.inter_op_num_threads = 1
+            opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            opts.log_severity_level = 3
+            sess = ort.InferenceSession(path, sess_options=opts)
+            try:
+                inp = sess.get_inputs()[0]
+                shape = [dim if (isinstance(dim, int) and dim > 0) else 1 for dim in inp.shape]
+                dummy = np.zeros(shape, dtype=np.float32)
+                sess.run(None, {inp.name: dummy})
+            except Exception:
+                pass
+            return sess
+
+        # Auto-fix: if standup.onnx was passed as --standing (idle balance),
+        # route standup.onnx to the standup maneuver and use standing.onnx for idle balance.
+        if standing_onnx_path and "standup" in str(standing_onnx_path).lower():
+            if os.path.exists("standing.onnx"):
+                print(f"[Auto-Fix] '{standing_onnx_path}' is an episodic recovery maneuver, not an idle balance policy.")
+                print(f"           Routing '{standing_onnx_path}' -> standup maneuver (trigger with key U).")
+                print(f"           Loading 'standing.onnx' -> idle standing balance policy.")
+                if standup_onnx_path is None:
+                    standup_onnx_path = standing_onnx_path
+                standing_onnx_path = "standing.onnx"
+
         # Load walking policy
         self.walking_session = None
         self.default_gait_period_from_onnx = None
         if walking_onnx_path:
             print(f"Loading walking policy from: {walking_onnx_path}")
-            self.walking_session = ort.InferenceSession(walking_onnx_path)
+            self.walking_session = _create_optimized_ort_session(walking_onnx_path, "Walking policy")
             w_input_shape = self.walking_session.get_inputs()[0].shape
             w_output_shape = self.walking_session.get_outputs()[0].shape
             print(f"Walking policy input: {self.walking_session.get_inputs()[0].name}, shape: {w_input_shape}")
@@ -270,7 +324,7 @@ class PolicyInference:
         self.standing_session = None
         if standing_onnx_path:
             print(f"\nLoading standing policy from: {standing_onnx_path}")
-            self.standing_session = ort.InferenceSession(standing_onnx_path)
+            self.standing_session = _create_optimized_ort_session(standing_onnx_path, "Standing policy")
             s_input_shape = self.standing_session.get_inputs()[0].shape
             s_output_shape = self.standing_session.get_outputs()[0].shape
             print(f"Standing policy input: {self.standing_session.get_inputs()[0].name}, shape: {s_input_shape}")
@@ -285,7 +339,7 @@ class PolicyInference:
         self.ground_pick_period = ground_pick_period
         if ground_pick_onnx_path:
             print(f"\nLoading ground pick policy from: {ground_pick_onnx_path}")
-            self.ground_pick_session = ort.InferenceSession(ground_pick_onnx_path)
+            self.ground_pick_session = _create_optimized_ort_session(ground_pick_onnx_path, "Ground pick policy")
             gp_input_shape = self.ground_pick_session.get_inputs()[0].shape
             print(f"Ground pick policy input shape: {gp_input_shape}")
 
@@ -303,7 +357,7 @@ class PolicyInference:
             raise ValueError("Provide only one of --sit / --sitstand")
         if sit_onnx_path:
             print(f"\nLoading sit policy from: {sit_onnx_path}")
-            self.sit_session = ort.InferenceSession(sit_onnx_path)
+            self.sit_session = _create_optimized_ort_session(sit_onnx_path, "Sit policy")
             sit_input_shape = self.sit_session.get_inputs()[0].shape
             print(f"Sit policy input shape: {sit_input_shape}")
         elif sitstand_onnx_path:
@@ -312,7 +366,7 @@ class PolicyInference:
                     "--sitstand policies use the unified 13D command obs (61D); run with --new-cmd-obs"
                 )
             print(f"\nLoading sitstand policy from: {sitstand_onnx_path}")
-            self.sit_session = ort.InferenceSession(sitstand_onnx_path)
+            self.sit_session = _create_optimized_ort_session(sitstand_onnx_path, "Sitstand policy")
             self.is_sitstand = True
             ss_input_shape = self.sit_session.get_inputs()[0].shape
             print(f"Sitstand policy input shape: {ss_input_shape}")
@@ -322,15 +376,11 @@ class PolicyInference:
         self.slope_mode = False
         if slope_onnx_path:
             print(f"\nLoading slope policy from: {slope_onnx_path}")
-            self.slope_session = ort.InferenceSession(slope_onnx_path)
+            self.slope_session = _create_optimized_ort_session(slope_onnx_path, "Slope policy")
             sl_input_shape = self.slope_session.get_inputs()[0].shape
             print(f"Slope policy input shape: {sl_input_shape}")
 
-        # Episodic behavior policies (kick left/right, roulade). All three use
-        # the unified 61D obs layout with an ALL-ZERO 13D command (twist forced
-        # ~0 in training, head/body slots zero-padded), so triggering one is a
-        # plain session swap; after `duration` seconds control hands back to
-        # walking/standing (the behavior policies end standing on their own).
+        # Episodic behavior policies (kick left/right, roulade, standup).
         self.behavior_sessions = {}
         self.behavior_durations = {}
         self.behavior_mode = None       # name of the running behavior, or None
@@ -349,13 +399,13 @@ class PolicyInference:
                     "command obs (61D); run with --new-cmd-obs"
                 )
             print(f"\nLoading {name} policy from: {path}")
-            self.behavior_sessions[name] = ort.InferenceSession(path)
+            self.behavior_sessions[name] = _create_optimized_ort_session(path, f"{name} policy")
             self.behavior_durations[name] = duration
         # Load fetch policy if provided
         self.fetch_session = None
         if fetch_onnx_path:
             print(f"\nLoading fetch policy from: {fetch_onnx_path}")
-            self.fetch_session = ort.InferenceSession(fetch_onnx_path)
+            self.fetch_session = _create_optimized_ort_session(fetch_onnx_path, "Fetch policy")
             print(f"Fetch policy input shape: {self.fetch_session.get_inputs()[0].shape}")
 
         # Validate at least one policy loaded. A sitstand policy can run alone
@@ -403,11 +453,35 @@ class PolicyInference:
         self.mouth_tip_site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "mouth_tip")
         self.human_hand_geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "human_hand")
 
+        # Head camera with upright forward-facing orientation (looking forward-down at lawn)
+        self.head_cam_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "head_camera")
+        if self.head_cam_id >= 0:
+            model.cam_quat[self.head_cam_id] = [-0.696364, 0.122788, 0.122788, 0.696364]
+            model.cam_pos[self.head_cam_id] = [0.00, 0.0, -0.11]
+
+        # Human hand mocap body for animated lifting & throwing
+        self.hand_body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "human_hand")
+        self.hand_mocap_id = int(model.body_mocapid[self.hand_body_id]) if (self.hand_body_id >= 0 and self.hand_body_id < len(model.body_mocapid)) else -1
+        self.hand_default_pos = np.array([-0.20, 0.20, 0.30], dtype=np.float32)
+        self.toss_anim_active = False
+        self.toss_anim_time = 0.0
+        self.toss_anim_duration = 0.70
+        self.toss_launch_vel = None
+        self.ball_has_been_tossed = False
+        self.auto_fetch_after_toss = True
+
         # Autonomous ball fetch state machine
         self.fetch_mode = False
         self.fetch_state = "IDLE"
         self.fetch_state_time = 0.0
         self.ball_held = False
+
+        # Place ball resting calmly in the human hand at startup
+        if self.hand_mocap_id >= 0 and self.ball_qpos_adr is not None:
+            self.data.mocap_pos[self.hand_mocap_id] = self.hand_default_pos
+            self.data.qpos[self.ball_qpos_adr:self.ball_qpos_adr + 3] = self.hand_default_pos + np.array([0.02, 0.0, 0.035])
+            self.data.qpos[self.ball_qpos_adr + 3:self.ball_qpos_adr + 7] = [1, 0, 0, 0]
+            self.data.qvel[self.ball_qvel_adr:self.ball_qvel_adr + 6] = 0.0
 
         print(f"Sensors found:")
         print(f"  imu_ang_vel: id={self.imu_ang_vel_id}")
@@ -438,11 +512,11 @@ class PolicyInference:
 
         # Velocity command [lin_vel_x, lin_vel_y, ang_vel_z] — controls walking / policy switching
         self.vel_cmd = np.zeros(3, dtype=np.float32)
-        # Closed-loop Heading-Lock & Adaptive Terrain Locomotion
-        self.heading_lock_enabled = True
+        # Closed-loop Heading-Lock & Adaptive Terrain Locomotion (OFF by default, toggle via C and V)
+        self.heading_lock_enabled = False
         self.target_yaw = None
-        self.heading_kp = 2.0
-        self.auto_slowdown_enabled = True
+        self.heading_kp = 0.6
+        self.auto_slowdown_enabled = False
         self.nominal_vel_x = 0.0
         self.nominal_vel_y = 0.0
         self.nominal_vel_ang = 0.0
@@ -450,13 +524,13 @@ class PolicyInference:
         self.current_speed_scale = 1.0
         # Key-press step sizes and limits (overridden per mode in main())
         self.vel_step_x = 0.05
-        self.vel_step_y = 0.05
+        self.vel_step_y = 0.15
         self.vel_step_ang = 0.3
-        self.vel_max_x = 0.3
-        self.vel_min_x = -0.3
-        self.vel_max_y = 0.3
-        self.vel_min_y = -0.3
-        self.vel_max_ang = 1.5
+        self.vel_max_x = 0.25
+        self.vel_min_x = -0.25
+        self.vel_max_y = 0.20
+        self.vel_min_y = -0.20
+        self.vel_max_ang = 0.60
         # Body pose command. In new_cmd_obs mode this is 6D
         #   [x, y, z, roll, pitch, yaw] (m, m, m, rad, rad, rad)
         # In legacy mode only [z, pitch, roll] (first 3 indices reused as
@@ -581,14 +655,21 @@ class PolicyInference:
         qw, qx, qy, qz = self.data.qpos[self._trunk_qpos_adr + 3:self._trunk_qpos_adr + 7]
         return math.atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
 
-    def set_vel_cmd(self, lin_vel_x=0.0, lin_vel_y=0.0, ang_vel_z=0.0):
+    def set_vel_cmd(self, lin_vel_x=0.0, lin_vel_y=0.0, ang_vel_z=0.0, verbose=True):
         """Set velocity command (used for walking / policy switching)."""
+        cmd_changed = (
+            abs(self.nominal_vel_x - float(lin_vel_x)) > 1e-4 or
+            abs(self.nominal_vel_y - float(lin_vel_y)) > 1e-4 or
+            abs(self.nominal_vel_ang - float(ang_vel_z)) > 1e-4
+        )
         self.nominal_vel_x = float(lin_vel_x)
         self.nominal_vel_y = float(lin_vel_y)
         self.nominal_vel_ang = float(ang_vel_z)
 
-        # Update Heading Lock target yaw
-        if abs(ang_vel_z) > 0.05:
+        # Update Heading Lock target yaw if enabled
+        if not self.heading_lock_enabled:
+            self.target_yaw = None
+        elif abs(ang_vel_z) > 0.05:
             # Active steering by user: disengage target yaw lock
             self.target_yaw = None
         elif abs(lin_vel_x) > 0.01:
@@ -602,15 +683,18 @@ class PolicyInference:
         self.vel_cmd = np.array([effective_vx, self.nominal_vel_y, self.nominal_vel_ang], dtype=np.float32)
         self._update_policy_session()
         self._update_command()
-        lock_str = f" [Heading-Lock: {math.degrees(self.target_yaw):.1f}°]" if (self.heading_lock_enabled and self.target_yaw is not None) else ""
-        slow_str = f" [Slow: {self.current_speed_scale*100:.0f}%]" if (self.auto_slowdown_enabled and self.current_speed_scale < 0.98) else ""
-        print(f"Vel cmd: [{effective_vx:.2f}, {lin_vel_y:.2f}, {ang_vel_z:.2f}] [{self.current_policy}]{lock_str}{slow_str}")
+        if verbose and cmd_changed:
+            lock_str = f" [Heading-Lock: {math.degrees(self.target_yaw):.1f}°]" if (self.heading_lock_enabled and self.target_yaw is not None) else ""
+            slow_str = f" [Slow: {self.current_speed_scale*100:.0f}%]" if (self.auto_slowdown_enabled and self.current_speed_scale < 0.98) else ""
+            print(f"Vel cmd: [{effective_vx:.2f}, {lin_vel_y:.2f}, {ang_vel_z:.2f}] [{self.current_policy}]{lock_str}{slow_str}")
 
     def toggle_heading_lock(self):
         """Toggle Heading-Lock on/off (C key)."""
         self.heading_lock_enabled = not self.heading_lock_enabled
         if not self.heading_lock_enabled:
             self.target_yaw = None
+            self.vel_cmd[2] = self.nominal_vel_ang
+            self._update_command()
         elif abs(self.nominal_vel_x) > 0.01 and abs(self.nominal_vel_ang) <= 0.05:
             self.target_yaw = self.get_current_yaw()
         state_str = f"ON (target: {math.degrees(self.target_yaw):.1f}°)" if (self.heading_lock_enabled and self.target_yaw is not None) else ("ON" if self.heading_lock_enabled else "OFF")
@@ -628,6 +712,12 @@ class PolicyInference:
     def update_adaptive_locomotion(self, dt: float):
         """Update runtime closed-loop Heading-Lock and Terrain-Adaptive Auto-Deceleration."""
         if self.current_policy != "walking" or self.behavior_mode is not None or self.fetch_mode or self.ground_pick_mode:
+            return
+        if not self.auto_slowdown_enabled and not self.heading_lock_enabled:
+            if self.vel_cmd[0] != self.nominal_vel_x or self.vel_cmd[2] != self.nominal_vel_ang:
+                self.vel_cmd[0] = self.nominal_vel_x
+                self.vel_cmd[2] = self.nominal_vel_ang
+                self._update_command()
             return
 
         changed = False
@@ -664,11 +754,11 @@ class PolicyInference:
         if self.heading_lock_enabled and self.target_yaw is not None and abs(self.nominal_vel_x) > 0.01 and abs(self.nominal_vel_ang) <= 0.05:
             current_yaw = self.get_current_yaw()
             yaw_err = (self.target_yaw - current_yaw + np.pi) % (2 * np.pi) - np.pi
-            cmd_wz = float(np.clip(self.heading_kp * yaw_err, -0.85, 0.85))
-            if abs(self.vel_cmd[2] - cmd_wz) > 0.01:
+            cmd_wz = float(np.clip(self.heading_kp * yaw_err, -0.4, 0.4))
+            if abs(self.vel_cmd[2] - cmd_wz) > 0.005:
                 self.vel_cmd[2] = cmd_wz
                 changed = True
-        elif abs(self.nominal_vel_ang) > 0.05:
+        else:
             if self.vel_cmd[2] != self.nominal_vel_ang:
                 self.vel_cmd[2] = self.nominal_vel_ang
                 changed = True
@@ -840,22 +930,31 @@ class PolicyInference:
     def _end_ground_pick(self):
         """Switch back after a ground pick cycle completes."""
         self.ground_pick_mode = False
-        self.vel_cmd = np.zeros(3, dtype=np.float32)
-        if self.walking_session:
+        if self.fetch_mode and self.walking_session:
+            # Seamless transition directly to walking without intermediate standing pause!
+            self.current_policy = "walking"
+            self.ort_session = self.walking_session
+        elif self.walking_session and np.linalg.norm(self.vel_cmd) > self.switch_threshold:
             self.current_policy = "walking"
             self.ort_session = self.walking_session
         else:
             self.current_policy = "standing"
-            self.ort_session = self.standing_session
+            self.ort_session = self.standing_session if self.standing_session else self.walking_session
         self.head_offset[:] = 0.0
         self._update_command()
-        print(f"Ground pick: done → back to {self.current_policy}")
+        print(f"Ground pick: hoàn thành → chuyển mượt sang {self.current_policy}")
 
     def update_ground_pick_phase(self, dt: float):
         """Advance the ground pick phase; auto-exit when full cycle completes (including rising)."""
         if not self.ground_pick_mode:
             return
         new_phase = self.ground_pick_phase + dt / self.ground_pick_period
+        # Smooth fast transition: once ball is picked and robot has risen upright (phase >= 0.68, trunk_z >= 0.11m),
+        # immediately exit ground pick so robot doesn't stand frozen waiting!
+        trunk_z = float(self.data.qpos[self._trunk_qpos_adr + 2])
+        if self.fetch_mode and self.ball_held and new_phase >= 0.68 and trunk_z >= 0.110:
+            self._end_ground_pick()
+            return
         if new_phase >= 0.95:
             self._end_ground_pick()
             return
@@ -866,56 +965,147 @@ class PolicyInference:
         self.command[1] = np.sin(2 * np.pi * self.ground_pick_phase)
         self.command[2] = 0.0
 
-    def toss_ball(self, distance=None):
-        """Toss the ball into the arena. Robot remains stationary in place while ball flies/rolls."""
+    def toss_ball(self, distance=None, auto_fetch_after=True):
+        """Toss the ball into the arena with animated 3D human hand lifting and throwing."""
         if self.ball_qpos_adr is None or self.ball_qvel_adr is None:
             print("No ball in scene")
             return
 
-        # Release if held
+        # Release if held in mouth
         if self.ball_held:
             self.ball_held = False
             if self.ball_geom_id >= 0:
                 self.model.geom_contype[self.ball_geom_id] = 1
                 self.model.geom_conaffinity[self.ball_geom_id] = 1
 
-        # Launch position: human hand if present, otherwise in front of robot
-        if self.human_hand_geom_id >= 0:
-            hand_pos = self.data.geom_xpos[self.human_hand_geom_id].copy()
-            launch_pos = hand_pos + np.array([0.05, 0.0, -0.02])
-            vx = float(np.random.uniform(1.4, 1.7))
-            vy = float(np.random.uniform(-0.12, 0.12))
-            vz = float(np.random.uniform(0.55, 0.70))
+        self.ball_has_been_tossed = True
+        self.auto_fetch_after_toss = auto_fetch_after
+
+        # Randomized launch velocity
+        vx = float(np.random.uniform(1.35, 1.70))
+        vy = float(np.random.uniform(-0.15, 0.15))
+        vz = float(np.random.uniform(0.55, 0.72))
+        self.toss_launch_vel = np.array([vx, vy, vz], dtype=np.float32)
+
+        # Robot stands still in place while ball is launched
+        self.set_vel_cmd(0.0, 0.0, 0.0)
+
+        if self.hand_mocap_id >= 0:
+            # Start animated human hand lifting & flicking gesture
+            self.toss_anim_active = True
+            self.toss_anim_time = 0.0
+            start_pos = self.hand_default_pos.copy()
+            self.data.mocap_pos[self.hand_mocap_id] = start_pos
+            self.data.qpos[self.ball_qpos_adr:self.ball_qpos_adr + 3] = start_pos + np.array([0.02, 0.0, 0.035])
+            self.data.qpos[self.ball_qpos_adr + 3:self.ball_qpos_adr + 7] = [1, 0, 0, 0]
+            self.data.qvel[self.ball_qvel_adr:self.ball_qvel_adr + 3] = [vx, vy, vz]
+            self.data.qvel[self.ball_qvel_adr + 3:self.ball_qvel_adr + 6] = [0.0, 2.0, 0.0]
+            if auto_fetch_after:
+                self.fetch_mode = True
+                self.fetch_state = "BALL_IN_FLIGHT"
+                self.fetch_state_time = 0.0
+                print(f"\n[Auto-Toss] ✋ Bàn tay người hất bóng bay vào sân (vx={vx:.2f} m/s)...")
+            else:
+                self.fetch_mode = False
+                self.fetch_state = "IDLE"
+                self.fetch_state_time = 0.0
+                print(f"\n[Auto-Toss] ✋ Bàn tay người ném bóng vào sân (vx={vx:.2f} m/s)! Bấm phím 'F' để robot bắt đầu đi nhặt.")
         else:
+            # Fallback if no mocap hand
             robot_pos = self.data.qpos[self._trunk_qpos_adr:self._trunk_qpos_adr + 2]
             rot = _quat2mat(self.data.xquat[self.trunk_base_id])
-            robot_yaw = math.atan2(rot[1, 0], rot[0, 0])
             launch_pos = np.array([
                 robot_pos[0] + rot[0, 0] * 0.15,
                 robot_pos[1] + rot[1, 0] * 0.15,
                 0.32,
             ])
-            spd_fwd = float(np.random.uniform(1.2, 1.5))
-            angle = robot_yaw + float(np.random.uniform(-0.15, 0.15))
-            vx = math.cos(angle) * spd_fwd
-            vy = math.sin(angle) * spd_fwd
-            vz = float(np.random.uniform(0.5, 0.65))
+            self.data.qpos[self.ball_qpos_adr:self.ball_qpos_adr + 3] = launch_pos
+            self.data.qpos[self.ball_qpos_adr + 3:self.ball_qpos_adr + 7] = [1, 0, 0, 0]
+            self.data.qvel[self.ball_qvel_adr:self.ball_qvel_adr + 3] = [vx, vy, vz]
+            self.data.qvel[self.ball_qvel_adr + 3:self.ball_qvel_adr + 6] = 0.0
+            if auto_fetch_after:
+                self.fetch_mode = True
+                self.fetch_state = "BALL_IN_FLIGHT"
+                self.fetch_state_time = 0.0
+                print(f"\n[Auto-Toss] ⚾ Đã ném bóng vào sân! Robot đứng đợi bóng dừng rồi đi nhặt...")
+            else:
+                self.fetch_mode = False
+                self.fetch_state = "IDLE"
+                self.fetch_state_time = 0.0
+                print(f"\n[Auto-Toss] ⚾ Đã ném bóng vào sân! Bấm phím 'F' để robot bắt đầu đi nhặt bóng.")
 
-        self.data.qpos[self.ball_qpos_adr:self.ball_qpos_adr + 3] = launch_pos
-        self.data.qpos[self.ball_qpos_adr + 3:self.ball_qpos_adr + 7] = [1, 0, 0, 0]
-        self.data.qvel[self.ball_qvel_adr:self.ball_qvel_adr + 3] = [vx, vy, vz]
-        self.data.qvel[self.ball_qvel_adr + 3:self.ball_qvel_adr + 6] = 0.0
+    def update_hand_toss_animation(self, dt: float):
+        """Animate realistic human hand lifting and tossing the ball."""
+        # When waiting before any toss, keep ball resting stably in the palm
+        if not self.ball_has_been_tossed and not self.toss_anim_active:
+            if self.hand_mocap_id >= 0 and self.ball_qpos_adr is not None:
+                self.data.mocap_pos[self.hand_mocap_id] = self.hand_default_pos
+                self.data.qpos[self.ball_qpos_adr:self.ball_qpos_adr + 3] = self.hand_default_pos + np.array([0.02, 0.0, 0.035])
+                self.data.qvel[self.ball_qvel_adr:self.ball_qvel_adr + 6] = 0.0
+            return
 
-        # Activate Auto-Fetch in BALL_IN_FLIGHT state: robot stays in place until ball stops!
-        self.fetch_mode = True
-        self.fetch_state = "BALL_IN_FLIGHT"
-        self.fetch_state_time = 0.0
-        self.set_vel_cmd(0.0, 0.0, 0.0)
-        print(f"\n[Auto-Fetch] ⚾ ĐÃ NÉM BÓNG VÀO SÂN!")
-        print(f"[Auto-Fetch] ⏳ Robot ĐỨNG NGUYÊN TẠI CHỖ dõi theo quả bóng cho đến khi bóng dừng hẳn...")
+        if self.hand_mocap_id < 0 or not self.toss_anim_active:
+            return
+
+        self.toss_anim_time += dt
+        t = self.toss_anim_time
+
+        if t < 0.20:
+            # Phase 1: dip down slightly and pull back to gather momentum
+            frac = t / 0.20
+            hand_pos = self.hand_default_pos + np.array([-0.02 * frac, 0.0, -0.03 * frac])
+            self.data.mocap_pos[self.hand_mocap_id] = hand_pos
+            # Ball remains firmly in palm
+            self.data.qpos[self.ball_qpos_adr:self.ball_qpos_adr + 3] = hand_pos + np.array([0.02, 0.0, 0.035])
+            self.data.qvel[self.ball_qvel_adr:self.ball_qvel_adr + 6] = 0.0
+
+        elif t < 0.45:
+            # Phase 2: smooth accelerating forward-upward arc (hất bổng lên)
+            frac = (t - 0.20) / 0.25
+            arc_x = -0.02 + 0.14 * (frac ** 1.5)
+            arc_z = -0.03 + 0.11 * math.sin(frac * math.pi * 0.5)
+            hand_pos = self.hand_default_pos + np.array([arc_x, 0.0, arc_z])
+            self.data.mocap_pos[self.hand_mocap_id] = hand_pos
+            # Ball follows hand motion
+            self.data.qpos[self.ball_qpos_adr:self.ball_qpos_adr + 3] = hand_pos + np.array([0.02, 0.0, 0.035])
+            self.data.qvel[self.ball_qvel_adr:self.ball_qvel_adr + 6] = 0.0
+
+        elif t >= 0.45 and self.toss_launch_vel is not None:
+            # Phase 3: APEX RELEASE -> launch ball with physics velocity!
+            hand_pos = self.data.mocap_pos[self.hand_mocap_id].copy()
+            self.data.qpos[self.ball_qpos_adr:self.ball_qpos_adr + 3] = hand_pos + np.array([0.04, 0.0, 0.035])
+            self.data.qvel[self.ball_qvel_adr:self.ball_qvel_adr + 3] = self.toss_launch_vel
+            self.data.qvel[self.ball_qvel_adr + 3:self.ball_qvel_adr + 6] = [0.0, 2.0, 0.0]
+            launch_speed = float(np.linalg.norm(self.toss_launch_vel))
+            self.toss_launch_vel = None
+
+            self.set_vel_cmd(0.0, 0.0, 0.0)
+            if self.auto_fetch_after_toss:
+                self.fetch_mode = True
+                self.fetch_state = "BALL_IN_FLIGHT"
+                self.fetch_state_time = 0.0
+                print(f"[Auto-Toss] 🚀 Bàn tay đã hất bóng bay vào sân! Vận tốc: {launch_speed:.2f} m/s")
+                print(f"[Auto-Fetch] ⏳ Robot đứng quan sát đợi bóng dừng rồi sẽ tự xuất phát...")
+            else:
+                self.fetch_mode = False
+                self.fetch_state = "IDLE"
+                self.fetch_state_time = 0.0
+                print(f"[Auto-Toss] 🚀 Bàn tay đã hất bóng bay vào sân! Vận tốc: {launch_speed:.2f} m/s")
+                print(f"[Auto-Fetch] 🔔 Robot đứng chờ. BẤM PHÍM 'F' để robot bắt đầu di chuyển nhặt bóng!")
+
+        elif t < 0.70:
+            # Phase 4: Follow through and return smoothly to rest
+            frac = (t - 0.45) / 0.25
+            apex_pos = self.hand_default_pos + np.array([0.12, 0.0, 0.08])
+            hand_pos = (1.0 - frac) * apex_pos + frac * self.hand_default_pos
+            self.data.mocap_pos[self.hand_mocap_id] = hand_pos
+
+        else:
+            self.data.mocap_pos[self.hand_mocap_id] = self.hand_default_pos
+            self.toss_anim_active = False
 
     def trigger_fetch(self):
-        """Toggle autonomous ball fetch mode."""
+        """Toggle autonomous ball fetch mode (press F)."""
         if self.ball_qpos_adr is None:
             print("No ball in scene (cannot fetch)")
             return
@@ -924,41 +1114,36 @@ class PolicyInference:
             return
 
         if self.fetch_mode:
+            # Toggle off: Stop immediately and stand still in place
             self.fetch_mode = False
             self.fetch_state = "IDLE"
             self.set_vel_cmd(0.0, 0.0, 0.0)
             self.head_offset[:] = 0.0
             self._update_command()
-            print("[Auto-Fetch] Chế độ Auto-Fetch: TẮT")
+            print("[Auto-Fetch] ⏹ Đã dừng di chuyển (robot đứng yên tại chỗ). Bấm F để tiếp tục.")
             return
 
-        # Starting fetch: if ball is held or close to feet, toss it out first!
-        robot_pos = self.data.qpos[self._trunk_qpos_adr:self._trunk_qpos_adr + 2]
-        ball_pos = self.data.qpos[self.ball_qpos_adr:self.ball_qpos_adr + 2]
-        dist = float(np.linalg.norm(ball_pos - robot_pos))
-        if self.ball_held or dist < 0.22:
-            self.toss_ball()
-            return
+        ball_pos = self.data.qpos[self.ball_qpos_adr:self.ball_qpos_adr + 3]
+        dist_to_hand = float(np.linalg.norm(ball_pos - self.hand_default_pos)) if self.hand_mocap_id >= 0 else 999.0
+        dist_to_zone = float(np.hypot(ball_pos[0] - (-0.22), ball_pos[1] - 0.22))
 
-        # Ball is already in arena: check if ball is still flying/rolling
-        ball_vel = self.data.qvel[self.ball_qvel_adr:self.ball_qvel_adr + 3]
-        ball_speed = float(np.linalg.norm(ball_vel))
-        ball_z = float(self.data.qpos[self.ball_qpos_adr + 2])
+        # Check if ball needs to be tossed (held in hand, initial position in palm, or returned to drop zone)
+        ball_in_human_area = (dist_to_hand < 0.20) or (dist_to_zone < 0.25)
+        need_toss = (self.hand_mocap_id >= 0) and ball_in_human_area
 
-        self.fetch_mode = True
-        self.fetch_state_time = 0.0
-        self.ball_held = False
-        if self.walking_session:
-            self.current_policy = "walking"
-            self.ort_session = self.walking_session
-
-        if ball_speed > 0.05 or ball_z > 0.045:
-            self.fetch_state = "BALL_IN_FLIGHT"
-            self.set_vel_cmd(0.0, 0.0, 0.0)
-            print("[Auto-Fetch] BẬT: Bóng đang lăn/bay -> Robot đứng nguyên tại chỗ đợi bóng dừng...")
+        if need_toss:
+            print("\n[Auto-Fetch] 🎾 Bấm 'F' -> Bắt đầu quy trình Fetch: Ném bóng vào sân...")
+            self.toss_ball(auto_fetch_after=True)
         else:
+            # Ball is already out on the field: immediately walk to fetch it
+            self.fetch_mode = True
+            self.fetch_state_time = 0.0
+            self.ball_held = False
+            if self.walking_session:
+                self.current_policy = "walking"
+                self.ort_session = self.walking_session
             self.fetch_state = "NAVIGATE"
-            print("[Auto-Fetch] BẬT: Robot tự động focus vào bóng, chạy tới và gắp bóng!")
+            print("\n[Auto-Fetch] 🚀 Bấm 'F' -> Robot bắt đầu di chuyển tới bóng!")
 
     def update_fetch(self, dt: float):
         """Update autonomous fetch state machine."""
@@ -992,78 +1177,112 @@ class PolicyInference:
             # Head turns to track flying/rolling ball
             self.head_offset[1] = -0.20
             self.head_offset[2] = float(np.clip(yaw_err * 0.7, -0.4, 0.4))
+            # Head turns to track flying/rolling ball:
+            # Khi bóng còn đang bay trên cao (z > 0.08m): ngước đầu lên ngắm bóng (-0.20 rad)
+            # Khi bóng đã rơi xuống sàn (z <= 0.08m): đầu quay chúc xuống nhìn bóng lăn (+0.18 rad)
+            target_pitch = -0.20 if ball_pos_3d[2] > 0.08 else 0.18
+            target_yaw = float(np.clip(yaw_err * 0.7, -0.4, 0.4))
+            alpha = min(1.0, 10.0 * dt)
+            self.head_offset[1] += alpha * (target_pitch - self.head_offset[1])
+            self.head_offset[2] += alpha * (target_yaw - self.head_offset[2])
             self._update_command()
 
-            # Wait until ball lands on floor and rolls to a complete stop
-            ball_settled = (ball_pos_3d[2] <= 0.045 and ball_speed < 0.05 and self.fetch_state_time > 0.5)
-            if ball_settled or self.fetch_state_time > 2.5:
+            # Wait until ball lands on floor and rolls to a reasonable speed
+            ball_settled = (ball_pos_3d[2] <= 0.045 and (ball_speed < 0.20 or self.fetch_state_time > 0.6))
+            if ball_settled or self.fetch_state_time > 1.2:
                 self.fetch_state = "NAVIGATE"
                 self.fetch_state_time = 0.0
                 print(f"[Auto-Fetch] ⚾ Bóng ĐÃ DỪNG HẲN tại ({ball_pos_3d[0]:.2f}, {ball_pos_3d[1]:.2f}) m! Robot bắt đầu di chuyển tới bóng...")
 
         elif self.fetch_state == "NAVIGATE":
-            # Turn in place if heading error is large (> 0.30 rad ~ 17 deg)
-            if abs(yaw_err) > 0.30:
-                cmd_yaw = float(np.clip(yaw_err * 2.2, -0.85, 0.85))
-                cmd_fwd = 0.0  # spin in place without orbiting!
+            # Điều khiển hướng tới bóng linh hoạt:
+            if abs(yaw_err) > 0.60:
+                # Góc lệch lớn: Xoay tại chỗ dứt khoát 1.35 rad/s để đối diện bóng
+                cmd_yaw = float(np.clip(yaw_err * 2.2, -1.35, 1.35))
+                cmd_fwd = 0.0
+            elif abs(yaw_err) > 0.20:
+                # Góc lệch vừa: Vừa tiến vừa uốn lái mạnh để khóa trục ngắm vào quả bóng
+                cmd_yaw = float(np.clip(yaw_err * 2.5, -0.80, 0.80))
+                cmd_fwd = 0.14
+            elif dist_to_ball > 0.22:
+                # Đã khóa trục ngắm: Phi thẳng tốc độ cao tới bóng
+                cmd_yaw = float(np.clip(yaw_err * 2.0, -0.40, 0.40))
+                cmd_fwd = 0.28
             else:
-                cmd_yaw = float(np.clip(yaw_err * 1.8, -0.6, 0.6))
-                cmd_fwd = 0.22 if abs(yaw_err) < 0.18 else 0.10
-
-            self.set_vel_cmd(cmd_fwd, 0.0, cmd_yaw)
-            self.head_offset[1] = -0.25
-            self.head_offset[2] = float(np.clip(yaw_err * 0.7, -0.4, 0.4))
-            self._update_command()
-
-            if dist_to_ball < 0.25 and abs(yaw_err) < 0.30:
+                # Cự ly gần (<= 22cm): chuyển sang tiếp cận căn chỉnh chân
                 self.fetch_state = "APPROACH"
                 self.fetch_state_time = 0.0
-                print(f"[Auto-Fetch] Tiếp cận gần bóng ({dist_to_ball*100:.0f}cm) -> Chuyển sang căn chỉnh chính xác vị trí chân...")
+                print(f"[Auto-Fetch] Tiếp cận sát bóng ({dist_to_ball*100:.0f}cm) -> Căn chỉnh chân...")
+                cmd_yaw = float(np.clip(yaw_err * 2.5, -0.40, 0.40))
+                cmd_fwd = 0.14
+
+            self.set_vel_cmd(cmd_fwd, 0.0, cmd_yaw, verbose=False)
+            self.head_offset[1] = -0.25
+            self.head_offset[2] = float(np.clip(yaw_err * 0.7, -0.4, 0.4))
+            # Đầu quay chúc xuống nhìn quả bóng trên mặt sàn và bám theo góc yaw của bóng:
+            target_pitch = float(np.clip(0.18 + 0.12 * (1.0 - min(dist_to_ball, 1.0)), 0.18, 0.30))
+            target_yaw = float(np.clip(yaw_err * 0.7, -0.4, 0.4))
+            alpha = min(1.0, 10.0 * dt)
+            self.head_offset[1] += alpha * (target_pitch - self.head_offset[1])
+            self.head_offset[2] += alpha * (target_yaw - self.head_offset[2])
+            self._update_command()
+
+            # In tiến độ di chuyển mỗi 0.5s
+            if int(self.fetch_state_time / 0.5) > int((self.fetch_state_time - dt) / 0.5):
+                print(f"[Auto-Fetch] 🏃 Đang tới bóng: cách {dist_to_ball*100:.0f}cm | Cmd: fwd={cmd_fwd:+.2f}, yaw={cmd_yaw:+.2f}")
 
         elif self.fetch_state == "APPROACH":
             ex = rel_b[0] - TARGET_X
 
-            # If heading is off, prioritize rotating in place to prevent circular drift
-            if abs(yaw_err) > 0.18:
-                cmd_fwd = 0.0
-                cmd_yaw = float(np.clip(yaw_err * 2.2, -0.7, 0.7))
-            else:
-                cmd_yaw = float(np.clip(yaw_err * 1.5, -0.3, 0.3))
-                if ex > 0.015:
-                    cmd_fwd = float(np.clip(ex * 1.2, 0.11, 0.18))
-                elif ex < -0.020:
-                    cmd_fwd = -0.06
-                else:
-                    cmd_fwd = 0.0
+            # Khóa chặt góc lái thẳng bóng
+            cmd_yaw = float(np.clip(yaw_err * 2.8, -0.55, 0.55))
 
-            self.set_vel_cmd(cmd_fwd, 0.0, cmd_yaw)
+            # Điều khiển vận tốc tiến chính xác đưa bóng vào sweet spot (x*=8.8cm)
+            if ex > 0.035:
+                cmd_fwd = float(np.clip(ex * 1.5, 0.12, 0.20))
+            elif ex > 0.008:
+                cmd_fwd = float(np.clip(ex * 1.4, 0.07, 0.12))
+            elif ex < -0.015:
+                cmd_fwd = -0.08  # lùi nhẹ nếu lỡ vượt quá
+            else:
+                cmd_fwd = 0.05
+
+            self.set_vel_cmd(cmd_fwd, 0.0, cmd_yaw, verbose=False)
             self.head_offset[1] = -0.32
             self.head_offset[2] = float(np.clip(yaw_err * 0.8, -0.4, 0.4))
+            # Cúi đầu xuống nhìn quả bóng sát mũi chân:
+            target_pitch = float(np.clip(0.32 + 0.08 * (0.22 - dist_to_ball), 0.30, 0.40))
+            target_yaw = float(np.clip(yaw_err * 0.8, -0.4, 0.4))
+            alpha = min(1.0, 10.0 * dt)
+            self.head_offset[1] += alpha * (target_pitch - self.head_offset[1])
+            self.head_offset[2] += alpha * (target_yaw - self.head_offset[2])
             self._update_command()
 
-            # Sweet spot reached condition: ball nestled right in front of feet
-            in_range = (0.070 <= rel_b[0] <= 0.105) and (abs(rel_b[1]) <= 0.035) and (abs(yaw_err) < 0.22)
-            timeout_pick = (self.fetch_state_time > 2.5) and (0.065 <= rel_b[0] <= 0.115) and (abs(rel_b[1]) <= 0.045)
+            # In log căn chỉnh mỗi 0.3s
+            if int(self.fetch_state_time / 0.3) > int((self.fetch_state_time - dt) / 0.3):
+                print(f"[Auto-Fetch] 🎯 Căn bóng: cách {dist_to_ball*100:.1f}cm (x={rel_b[0]*100:.1f}cm, y={rel_b[1]*100:.1f}cm) | t={self.fetch_state_time:.1f}s")
 
-            if in_range or timeout_pick:
-                self.fetch_state = "SETTLE"
-                self.fetch_state_time = 0.0
-                self.set_vel_cmd(0.0, 0.0, 0.0)
-                self.head_offset[:] = 0.0
-                self._update_command()
-                print(f"[Auto-Fetch] 🎯 BÓNG ĐÃ NẰM CHÍNH XÁC Ở CHÂN (x={rel_b[0]*100:.1f}cm, y={rel_b[1]*100:.1f}cm)! Chuẩn bị cúi...")
+            # ĐIỀU KIỆN GẮP CHUẨN XÁC:
+            # Quả bóng BẮT BUỘC phải nằm ngay trước mũi chân và thẳng tâm mỏ:
+            # 1. rel_b[0] trong khoảng 6.8cm - 11.2cm (tâm mỏ khi cúi là 9.16cm, bóng bán kính 2.5cm)
+            # 2. Sai lệch ngang |rel_b[1]| <= 3.8cm (bóng nằm lọt giữa 2 chân)
+            # 3. Góc lệch hướng |yaw_err| < 0.25 rad (~14°)
+            in_sweet_spot = (0.068 <= rel_b[0] <= 0.112) and (abs(rel_b[1]) <= 0.038) and (abs(yaw_err) < 0.25)
+            # Fallback nếu sau 2.0s đã ở rất sát (tối đa 11.8cm, KHÔNG BAO GIỜ gắp ở 18cm hay 24cm!):
+            close_ok = (self.fetch_state_time > 2.0) and (0.062 <= rel_b[0] <= 0.118) and (abs(rel_b[1]) <= 0.045)
 
-        elif self.fetch_state == "SETTLE":
-            self.set_vel_cmd(0.0, 0.0, 0.0)
-            if self.fetch_state_time >= 0.20:
+            if in_sweet_spot or close_ok:
                 self.fetch_state = "PICK"
                 self.fetch_state_time = 0.0
+                self.set_vel_cmd(0.0, 0.0, 0.0, verbose=False)
+                self.head_offset[:] = 0.0
+                self._update_command()
                 self.trigger_ground_pick()
-                print("[Auto-Fetch] Bắt đầu cúi gắp bóng (Ground Pick)!")
+                print(f"[Auto-Fetch] 🎯 BÓNG ĐÃ NẰM CHÍNH XÁC Ở CHÂN (x={rel_b[0]*100:.1f}cm, y={rel_b[1]*100:.1f}cm)! Bắt đầu cúi gắp...")
 
         elif self.fetch_state == "PICK":
-            # Grasp when beak reaches lowest crouch (phase >= 0.38 or dist_mouth < 0.08)
-            if (getattr(self, "ground_pick_phase", 0.0) >= 0.38 or dist_mouth < 0.08) and not self.ball_held:
+            # Grasp when beak reaches lowest crouch (phase >= 0.35 or dist_mouth < 0.07)
+            if (getattr(self, "ground_pick_phase", 0.0) >= 0.35 or dist_mouth < 0.07) and not self.ball_held:
                 self.ball_held = True
                 if self.ball_geom_id >= 0:
                     self.model.geom_contype[self.ball_geom_id] = 0
@@ -1072,36 +1291,68 @@ class PolicyInference:
 
             if not self.ground_pick_mode:
                 self.head_offset[:] = 0.0
-                self._update_command()
                 self.fetch_state = "RETURN"
                 self.fetch_state_time = 0.0
-                print("[Auto-Fetch] Đã đứng dậy thẳng đứng! Đang mang bóng về...")
+                if self.walking_session:
+                    self.current_policy = "walking"
+                    self.ort_session = self.walking_session
+                print("\n[Auto-Fetch] 🏃 Đã đứng dậy! Lập tức mang bóng quay về cánh tay...")
 
         elif self.fetch_state == "RETURN":
-            home_target = np.array([-0.20, 0.23], dtype=np.float32) if self.human_hand_geom_id >= 0 else np.array([0.0, 0.0], dtype=np.float32)
-            rel_home_w = home_target - robot_pos
-            rel_home_b = rot[:2, :2].T @ rel_home_w
-            dist_home = float(np.hypot(rel_home_b[0], rel_home_b[1]))
-            yaw_err_home = float(math.atan2(rel_home_b[1], rel_home_b[0]))
-
-            if abs(yaw_err_home) > 0.35:
-                cmd_yaw = float(np.clip(yaw_err_home * 2.2, -0.85, 0.85))
-                cmd_fwd = 0.0
+            # Mục tiêu: Đưa bóng về sát vị trí cánh tay người
+            if self.hand_mocap_id >= 0:
+                hand_target = self.data.mocap_pos[self.hand_mocap_id][:2].copy()
             else:
-                cmd_yaw = float(np.clip(yaw_err_home * 1.8, -0.6, 0.6))
-                cmd_fwd = 0.20 if abs(yaw_err_home) < 0.20 else 0.10
+                hand_target = np.array([-0.20, 0.20], dtype=np.float32)
 
-            self.set_vel_cmd(cmd_fwd, 0.0, cmd_yaw)
+            # Điểm đỗ của robot: đứng ngay trước bàn tay người (cách 9cm về phía trước)
+            dock_target = hand_target + np.array([0.09, 0.0], dtype=np.float32)
 
-            if dist_home < 0.25 or self.fetch_state_time > 8.0:
+            rel_home_w = dock_target - robot_pos
+            rel_home_b = rot[:2, :2].T @ rel_home_w
+            dist_dock = float(np.hypot(rel_home_b[0], rel_home_b[1]))
+            yaw_err_home = float(math.atan2(rel_home_b[1], rel_home_b[0]))
+            dist_to_arm = float(np.hypot(hand_target[0] - robot_pos[0], hand_target[1] - robot_pos[1]))
+
+            # Điều khiển chuyển động quay và tiến về cánh tay dứt khoát, mượt mà:
+            if abs(yaw_err_home) > 0.70:
+                # Góc lệch lớn: Xoay tại chỗ tốc độ cao hướng về cánh tay người (1.35 rad/s)
+                cmd_yaw = float(np.clip(yaw_err_home * 2.0, -1.35, 1.35))
+                cmd_fwd = 0.0
+            elif abs(yaw_err_home) > 0.35:
+                cmd_yaw = float(np.clip(yaw_err_home * 1.5, -0.50, 0.50))
+                cmd_fwd = 0.18
+            elif dist_to_arm > 0.25:
+                # Đã đúng hướng: Phi thẳng tốc độ cao về cánh tay
+                cmd_yaw = float(np.clip(yaw_err_home * 1.2, -0.30, 0.30))
+                cmd_fwd = 0.28
+            else:
+                # Tiếp cận sát cánh tay: Giảm tốc êm ái
+                cmd_yaw = float(np.clip(yaw_err_home * 1.0, -0.20, 0.20))
+                cmd_fwd = float(np.clip(dist_to_arm * 0.9, 0.08, 0.16))
+
+            self.set_vel_cmd(cmd_fwd, 0.0, cmd_yaw, verbose=False)
+            # Mang bóng về cánh tay: Giữ đầu thẳng tự nhiên, nhìn về phía trước
+            alpha = min(1.0, 10.0 * dt)
+            self.head_offset[1] += alpha * (0.0 - self.head_offset[1])
+            self.head_offset[2] += alpha * (0.0 - self.head_offset[2])
+            self._update_command()
+
+            # In thông báo kèm lệnh điều khiển mỗi 0.5 giây để theo dõi tiến độ
+            if int(self.fetch_state_time / 0.5) > int((self.fetch_state_time - dt) / 0.5):
+                print(f"[Auto-Fetch] 🏃 Đang điều khiển về cánh tay: cách tay {dist_to_arm*100:.0f}cm | Lệnh: fwd={cmd_fwd:+.2f} m/s, yaw={cmd_yaw:+.2f} rad/s")
+
+            # Điều kiện đã về tới sát cánh tay (trong khoảng 20cm hoặc gần vùng trả):
+            reached_arm = (dist_to_arm < 0.20) or (dist_dock < 0.12) or (self.fetch_state_time > 6.0 and dist_to_arm < 0.28)
+            if reached_arm:
                 self.fetch_state = "RELEASE"
                 self.fetch_state_time = 0.0
-                self.set_vel_cmd(0.0, 0.0, 0.0)
-                print("[Auto-Fetch] Đã về tới vùng người ném -> Thả bóng...")
+                self.set_vel_cmd(0.0, 0.0, 0.0, verbose=False)
+                print(f"\n[Auto-Fetch] 🎯 ĐÃ VỀ ĐẾN SÁT CÁNH TAY (khoảng cách {dist_to_arm*100:.1f}cm)! Bắt đầu thả bóng...")
 
         elif self.fetch_state == "RELEASE":
-            self.set_vel_cmd(0.0, 0.0, 0.0)
-            if self.ball_held and self.fetch_state_time > 0.3:
+            self.set_vel_cmd(0.0, 0.0, 0.0, verbose=False)
+            if self.ball_held and self.fetch_state_time > 0.15:
                 self.ball_held = False
                 if self.ball_geom_id >= 0:
                     self.model.geom_contype[self.ball_geom_id] = 1
@@ -1109,11 +1360,29 @@ class PolicyInference:
                 if self.ball_qvel_adr is not None:
                     self.data.qvel[self.ball_qvel_adr:self.ball_qvel_adr + 3] = [0.05, 0.0, -0.05]
                 print("[Auto-Fetch] ★★★ ĐÃ THẢ BÓNG VÀO VÙNG TRẢ! NHIỆM VỤ HOÀN THÀNH XUẤT SẮC! ★★★")
+                print("[Auto-Fetch] 🎉 Microduck gật đầu ăn mừng đã hoàn thành xuất sắc! 🎉")
 
-            if self.fetch_state_time > 1.5:
+            # Cử động ăn mừng (gật gù & lắc đầu vui vẻ) trong khoảng 0.2s - 1.2s:
+            if 0.20 < self.fetch_state_time <= 1.20:
+                t_anim = self.fetch_state_time - 0.20
+                # Gật đầu 2 nhịp (tần số 2 Hz):
+                self.head_offset[1] = float(0.14 * np.sin(2.0 * np.pi * 2.0 * t_anim))
+                # Lắc đầu nhẹ nhàng sang 2 bên (tần số 1.5 Hz):
+                self.head_offset[2] = float(0.10 * np.sin(2.0 * np.pi * 1.5 * t_anim))
+                self._update_command()
+
+            if self.fetch_state_time > 1.20:
+                # KẾT THÚC THAO TÁC: Robot đứng dừng yên tại đó!
                 self.fetch_state = "IDLE"
                 self.fetch_mode = False
-                print("[Auto-Fetch] Sẵn sàng cho lượt tiếp theo! (Bấm X hoặc F để ném bóng tiếp)")
+                self.ball_has_been_tossed = False
+                if self.standing_session:
+                    self.current_policy = "standing"
+                    self.ort_session = self.standing_session
+                self.set_vel_cmd(0.0, 0.0, 0.0)
+                self.head_offset[:] = 0.0
+                self._update_command()
+                print("[Auto-Fetch] 🏁 Hoàn tất thao tác! Robot đứng dừng yên tại chỗ. (Bấm 'F' để ném và nhặt tiếp, hoặc dùng phím mũi tên để tự lái)")
 
     def trigger_behavior(self, name):
         """Start an episodic behavior (kick_left / kick_right / roulade).
@@ -1240,6 +1509,29 @@ class PolicyInference:
         else:
             print("Head mode: OFF")
 
+    def warmup_all_sessions(self):
+        """Pre-run inference on ALL loaded ONNX sessions to avoid runtime allocation/JIT stutter."""
+        obs = self.get_observations().reshape(1, -1)
+        sessions = []
+        if self.walking_session:
+            sessions.append(("walking", self.walking_session))
+        if self.standing_session:
+            sessions.append(("standing", self.standing_session))
+        if self.ground_pick_session:
+            sessions.append(("ground_pick", self.ground_pick_session))
+        if self.sit_session:
+            sessions.append(("sit", self.sit_session))
+        if self.slope_session:
+            sessions.append(("slope", self.slope_session))
+        for name, sess in self.behavior_sessions.items():
+            sessions.append((name, sess))
+
+        for name, sess in sessions:
+            try:
+                _ = sess.run([self.output_name], {self.input_name: obs})
+            except Exception:
+                pass
+
     def infer(self):
         """Run policy inference and return action."""
         obs = self.get_observations()
@@ -1260,10 +1552,8 @@ class PolicyInference:
         else:
             target_positions = self.default_pose + action * self.action_scale
 
-        # Legacy mode: head_offset is an external perturbation added on top of
-        # the policy output. New mode: head_offset is a COMMAND fed into the
-        # policy's obs, so the policy itself produces the offset head pose.
-        if not self.new_cmd_obs:
+        # Apply head offset to neck/head joints (servos 5:9)
+        if not self.new_cmd_obs or self.fetch_mode or np.any(self.head_offset != 0):
             target_positions = target_positions.copy()
             target_positions[5:9] += self.head_offset
         self.set_position_targets(target_positions)
@@ -1553,6 +1843,54 @@ class OdomAnchorOverlay:
             scn.ngeom += 1
 
 
+class TargetLockOverlay:
+    """Draws 3D targeting HUD (ground reticle tick marks + sight beam) in viewer.user_scn."""
+
+    RETICLE_RGBA = (0.85, 0.20, 0.85, 0.85)
+    BEAM_RGBA = (0.75, 0.15, 0.75, 0.4)
+
+    def __init__(self, model, policy):
+        self.model = model
+        self.policy = policy
+
+    def draw(self, data, scn):
+        if self.policy.ball_qpos_adr is None or scn is None:
+            return
+        ball_pos = data.qpos[self.policy.ball_qpos_adr:self.policy.ball_qpos_adr + 3]
+
+        # 1. 3D Reticle tick marks around the ball
+        # Subtle ground tick marks around the ball on the grass
+        ticks = [
+            (ball_pos + np.array([-0.065, 0, 0]), ball_pos + np.array([-0.040, 0, 0])),
+            (ball_pos + np.array([0.040, 0, 0]), ball_pos + np.array([0.065, 0, 0])),
+            (ball_pos + np.array([0, -0.065, 0]), ball_pos + np.array([0, -0.040, 0])),
+            (ball_pos + np.array([0, 0.040, 0]), ball_pos + np.array([0, 0.065, 0])),
+            (ball_pos + np.array([-0.055, 0, 0.003]), ball_pos + np.array([-0.038, 0, 0.003])),
+            (ball_pos + np.array([0.038, 0, 0.003]), ball_pos + np.array([0.055, 0, 0.003])),
+            (ball_pos + np.array([0, -0.055, 0.003]), ball_pos + np.array([0, -0.038, 0.003])),
+            (ball_pos + np.array([0, 0.038, 0.003]), ball_pos + np.array([0, 0.055, 0.003])),
+        ]
+        for p1, p2 in ticks:
+            if scn.ngeom >= scn.maxgeom:
+                break
+            g = scn.geoms[scn.ngeom]
+            mujoco.mjv_initGeom(g, mujoco.mjtGeom.mjGEOM_CAPSULE, np.zeros(3), np.zeros(3),
+                                np.eye(3).flatten(), np.array(self.RETICLE_RGBA, dtype=np.float32))
+            mujoco.mjv_connector(g, mujoco.mjtGeom.mjGEOM_CAPSULE, 0.002,
+                                 np.asarray(p1, dtype=np.float64), np.asarray(p2, dtype=np.float64))
+            scn.ngeom += 1
+
+        # 2. Sight beam from robot head camera to ball
+        if getattr(self.policy, "head_cam_id", -1) >= 0 and scn.ngeom < scn.maxgeom:
+            cam_pos = data.cam_xpos[self.policy.head_cam_id]
+            g = scn.geoms[scn.ngeom]
+            mujoco.mjv_initGeom(g, mujoco.mjtGeom.mjGEOM_CAPSULE, np.zeros(3), np.zeros(3),
+                                np.eye(3).flatten(), np.array(self.BEAM_RGBA, dtype=np.float32))
+            mujoco.mjv_connector(g, mujoco.mjtGeom.mjGEOM_CAPSULE, 0.0015,
+                                 np.asarray(cam_pos, dtype=np.float64), np.asarray(ball_pos, dtype=np.float64))
+            scn.ngeom += 1
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run ONNX policy in MuJoCo")
     parser.add_argument("--roller", action="store_true", help="Use roller skate robot XML (robot_walk_rollers.xml)")
@@ -1582,7 +1920,7 @@ def main():
     parser.add_argument("--save-csv", type=str, default=None, help="Save observations and actions to CSV file")
     parser.add_argument("--record", type=str, default=None, help="Enable recording mode: save observations to pickle file on Ctrl+C")
     parser.add_argument("--switch-threshold", type=float, default=0.05, help="Vel command magnitude threshold for walking/standing switch (default: 0.05)")
-    parser.add_argument("--ground-pick-period", type=float, default=4.0, help="Ground pick phase period in seconds (default: 4.0)")
+    parser.add_argument("--ground-pick-period", type=float, default=2.8, help="Ground pick phase period in seconds (default: 2.8)")
     parser.add_argument("--new-cmd-obs", action="store_true",
                         help="Use the unified 13D command obs layout (twist+head_pose+body_pose). "
                              "Required for policies trained with the new pose-command-tracking setup. "
@@ -1632,6 +1970,8 @@ def main():
                         help="Run simulation headless without opening the interactive viewer window")
     parser.add_argument("--auto-toss", action="store_true",
                         help="Automatically toss the ball at t=0.5s to demonstrate the full Autonomous Fetch pipeline")
+    parser.add_argument("--hud", action="store_true",
+                        help="Display the in-viewer PiP camera HUD in top-right corner (off by default for maximum FPS)")
     args = parser.parse_args()
 
     if not args.walking and not args.standing and not args.sitstand:
@@ -1670,6 +2010,12 @@ def main():
     elif args.roller:
         xml_path = MICRODUCK_ROLLERS_XML
     elif args.kick_left or args.kick_right:
+        xml_path = MICRODUCK_BALL_XML
+    elif args.fetch or args.auto_toss:
+        xml_path = MICRODUCK_FETCH_XML
+    elif args.walking and "rough" in str(args.walking).lower():
+        xml_path = MICRODUCK_ROUGH_XML
+    elif args.ground_pick:
         xml_path = MICRODUCK_BALL_XML
     else:
         xml_path = MICRODUCK_XML
@@ -1899,6 +2245,13 @@ def main():
     def handle_key(key):
         nonlocal policy_enabled, quit_requested
         try:
+            if key in ("up", "down", "left", "right", "a", "e", " "):
+                if policy.fetch_mode and not policy.head_mode and not policy.body_pose_mode:
+                    policy.fetch_mode = False
+                    policy.head_offset[:] = 0.0
+                    policy._update_command()
+                    print("[Manual Control] Bàn phím can thiệp -> Tắt Auto-Fetch, trao toàn quyền điều khiển cho người dùng (bấm F để bật lại)")
+
             if key == "up":
                 if policy.head_mode:
                     policy.head_offset[1] = np.clip(policy.head_offset[1] + policy.head_step, -policy.head_max, policy.head_max)
@@ -1907,7 +2260,7 @@ def main():
                 elif policy.body_pose_mode:
                     policy.bump_body("z", policy.body_cmd_step_z)
                 else:
-                    policy.set_vel_cmd(policy.vel_max_x, policy.vel_cmd[1], policy.vel_cmd[2])
+                    policy.set_vel_cmd(policy.vel_max_x, 0.0, 0.0)
             elif key == "down":
                 if policy.head_mode:
                     policy.head_offset[1] = np.clip(policy.head_offset[1] - policy.head_step, -policy.head_max, policy.head_max)
@@ -1916,7 +2269,7 @@ def main():
                 elif policy.body_pose_mode:
                     policy.bump_body("z", -policy.body_cmd_step_z)
                 else:
-                    policy.set_vel_cmd(policy.vel_min_x, policy.vel_cmd[1], policy.vel_cmd[2])
+                    policy.set_vel_cmd(policy.vel_min_x, 0.0, 0.0)
             elif key == "right":
                 if policy.head_mode:
                     policy.head_offset[2] = np.clip(policy.head_offset[2] - policy.head_step, -policy.head_max, policy.head_max)
@@ -1925,10 +2278,10 @@ def main():
                 elif policy.body_pose_mode:
                     policy.bump_body("pitch", -policy.body_cmd_step_angle)
                 elif args.roller:
-                    new_ang = np.clip(policy.vel_cmd[2] - policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang)
-                    policy.set_vel_cmd(policy.vel_cmd[0], policy.vel_cmd[1], new_ang)
+                    new_ang = np.clip(policy.nominal_vel_ang - policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang)
+                    policy.set_vel_cmd(policy.nominal_vel_x, 0.0, new_ang)
                 else:
-                    policy.set_vel_cmd(policy.vel_cmd[0], policy.vel_min_y, policy.vel_cmd[2])
+                    policy.set_vel_cmd(policy.nominal_vel_x, -policy.vel_step_y, 0.0)
             elif key == "left":
                 if policy.head_mode:
                     policy.head_offset[2] = np.clip(policy.head_offset[2] + policy.head_step, -policy.head_max, policy.head_max)
@@ -1937,10 +2290,10 @@ def main():
                 elif policy.body_pose_mode:
                     policy.bump_body("pitch", policy.body_cmd_step_angle)
                 elif args.roller:
-                    new_ang = np.clip(policy.vel_cmd[2] + policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang)
-                    policy.set_vel_cmd(policy.vel_cmd[0], policy.vel_cmd[1], new_ang)
+                    new_ang = np.clip(policy.nominal_vel_ang + policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang)
+                    policy.set_vel_cmd(policy.nominal_vel_x, 0.0, new_ang)
                 else:
-                    policy.set_vel_cmd(policy.vel_cmd[0], policy.vel_max_y, policy.vel_cmd[2])
+                    policy.set_vel_cmd(policy.nominal_vel_x, policy.vel_step_y, 0.0)
             elif key == " ":
                 if policy.head_mode:
                     policy.head_offset[:] = 0.0
@@ -1961,7 +2314,7 @@ def main():
             elif key == "f":
                 policy.trigger_fetch()
             elif key == "x":
-                policy.toss_ball()
+                policy.toss_ball(auto_fetch_after=False)
             elif key == "g":
                 if policy.ball_qpos_adr is not None:
                     robot_pos = policy.data.qpos[policy._trunk_qpos_adr:policy._trunk_qpos_adr + 2]
@@ -2007,7 +2360,7 @@ def main():
                 elif policy.body_pose_mode:
                     policy.bump_body("roll", policy.body_cmd_step_angle)
                 else:
-                    policy.set_vel_cmd(policy.vel_cmd[0], policy.vel_cmd[1], policy.vel_max_ang)
+                    policy.set_vel_cmd(policy.nominal_vel_x, 0.0, policy.vel_max_ang)
             elif key == "e":
                 if policy.head_mode:
                     policy.head_offset[3] = np.clip(policy.head_offset[3] - policy.head_step, -policy.head_max, policy.head_max)
@@ -2016,7 +2369,7 @@ def main():
                 elif policy.body_pose_mode:
                     policy.bump_body("roll", -policy.body_cmd_step_angle)
                 else:
-                    policy.set_vel_cmd(policy.vel_cmd[0], policy.vel_cmd[1], -policy.vel_max_ang)
+                    policy.set_vel_cmd(policy.nominal_vel_x, 0.0, -policy.vel_max_ang)
             elif key == "z":
                 if policy.head_mode:
                     policy.head_offset[0] = np.clip(policy.head_offset[0] + policy.head_step, -policy.head_max, policy.head_max)
@@ -2040,20 +2393,20 @@ def main():
 
     print("\nKeyboard controls (type in THIS terminal — the viewer window no longer captures keys):")
     print("  [ Velocity mode (default) ]")
-    print("  UP arrow:         increase lin_vel_x (push/accelerate)")
-    print("  DOWN arrow:       decrease lin_vel_x (0=coast, negative=brake)")
+    print("  UP arrow:         walk forward straight [lin_vel_x, 0, 0]")
+    print("  DOWN arrow:       walk backward straight [lin_vel_x, 0, 0]")
     if args.roller:
         print("  LEFT/RIGHT arrow: turn left/right (ang_vel_z heading error)")
         print("  A / E:            turn left/right (ang_vel_z, incremental)")
     else:
         print("  LEFT/RIGHT arrow: strafe left/right (lin_vel_y)")
         print("  A / E:            turn left/right (ang_vel_z)")
-    print("  SPACE:            coast (zero all commands)")
+    print("  SPACE:            stop / coast (zero all commands)")
     print("  C:                toggle Heading-Lock (giữ tuyệt đối hướng đi thẳng/lùi)")
     print("  V:                toggle Terrain-Adaptive Auto-Slowdown (tự giảm tốc khi gặp gồ ghề)")
     print("  T:                toggle policy inference on/off (paused = motors hold last target)")
-    print("  F:                Auto-Fetch: ném bóng (nếu ở gần/đang giữ), đợi bóng dừng rồi chạy tới gắp về")
-    print("  X:                Ném bóng vào sân (toss ball): robot đứng yên đợi bóng dừng rồi đi nhặt")
+    print("  F:                Auto-Fetch: ném bóng vào sân và robot tự chạy tới gắp về (bấm F lần nữa để dừng)")
+    print("  X:                Chỉ ném bóng vào sân (toss ball): robot đứng yên đợi cho tới khi bấm F")
     print("  G:                Ground pick (tự chạy tới gắp nếu bóng ở xa, cúi gắp nếu bóng ở chân)")
     print("  Y:                toggle sit (with --sit/--sitstand) or slope mode (with --slope)")
     print("  K:                kick with LEFT foot (requires --kick-left)")
@@ -2119,6 +2472,8 @@ def main():
         render_cam.elevation = -22.0
         render_cam.azimuth = 138.0
         frame_interval = max(1, int(round(1.0 / (control_dt * args.record_fps))))
+    head_renderer = mujoco.Renderer(model, height=135, width=190) if (record_frames is not None and policy.ball_qpos_adr is not None) else None
+    pip_cam = mujoco.MjvCamera() if head_renderer is not None else None
 
     viewer_ctx = _HeadlessViewer() if args.headless else mujoco.viewer.launch_passive(
         model, data, show_left_ui=False, show_right_ui=False, key_callback=viewer_key_callback)
@@ -2127,8 +2482,12 @@ def main():
         odom_overlay = OdomAnchorOverlay(model, load_odom_anchor_sets(args.odom_anchor_points)) \
             if (args.odom_anchor_points and viewer.user_scn is not None) else None
         odom_compare = OdomCompare(model, load_odom_anchor_sets()) if args.odom_compare else None
-        if odom_overlay is not None and viewer.user_scn is not None:
-            odom_overlay.draw(data, viewer.user_scn, odom_compare)
+        target_overlay = TargetLockOverlay(model, policy) if policy.ball_qpos_adr is not None else None
+        if viewer.user_scn is not None:
+            if odom_overlay is not None:
+                odom_overlay.draw(data, viewer.user_scn, odom_compare)
+            if target_overlay is not None:
+                target_overlay.draw(data, viewer.user_scn)
         viewer.sync()
         start_time = time.time()
 
@@ -2138,36 +2497,59 @@ def main():
             set_standby_gains(True)
             print("  Standby mode: kp set to 2.0 (XML units)")
 
+        # Warm-up ALL ONNX sessions, BAM controller, and physics to eliminate any runtime lag
         try:
-            prev_step_time = time.time()
+            policy.warmup_all_sessions()
+            if bam_ctrl is not None:
+                bam_ctrl.update()
+            mujoco.mj_step(model, data)
+        except Exception:
+            pass
+
+        try:
+            prev_step_time = time.perf_counter()
+            fps_window_start = time.perf_counter()
+            fps_window_steps = 0
+            measured_fps = 0.0
+            avg_step_ms = 20.0
+            avg_sim_ms = 0.0
+            avg_sync_ms = 0.0
+            step_durations = []
+            sim_durations = []
+            sync_durations = []
 
             while viewer.is_running() and not quit_requested:
-                step_start = time.time()
+                step_start = time.perf_counter()
 
                 for key in term.get_keys():
                     handle_key(key)
 
                 if not policy_enabled and policy_enable_time is not None:
-                    if step_start >= policy_enable_time:
+                    if time.time() >= policy_enable_time:
                         policy_enabled = True
                         if original_kp is not None:
                             set_standby_gains(False)
                             print("Policy inference enabled (after 1s standby)")
                             print(f"  Restored original kp gains (range: [{original_kp.min():.2f}, {original_kp.max():.2f}])")
 
-                actual_dt = step_start - prev_step_time
-                prev_step_time = step_start
+                # Fixed simulation timestep for robot controller and autonomous state machine.
+                # MuJoCo physics steps by exactly control_dt (0.02s) on each control cycle;
+                # using control_dt prevents wall-clock drift, NTP jumps, or rendering lag from warping state timers.
+                sim_dt = control_dt
 
-                policy.update_ground_pick_phase(actual_dt)
-                policy.update_behavior(actual_dt)
-                policy.update_fetch(actual_dt)
-                policy.update_adaptive_locomotion(actual_dt)
-
-                if args.auto_toss and control_step_count == int(0.5 / control_dt):
-                    print("\n[Auto-Toss] Launching ball from human hand for demo...")
-                    policy.toss_ball()
+                policy.update_ground_pick_phase(sim_dt)
+                policy.update_behavior(sim_dt)
+                policy.update_fetch(sim_dt)
+                policy.update_adaptive_locomotion(sim_dt)
+                policy.update_hand_toss_animation(sim_dt)
 
                 if record_frames is not None and control_step_count % frame_interval == 0:
+                    if render_cam is not None:
+                        robot_x = float(data.qpos[qpos_adr + 0])
+                        robot_y = float(data.qpos[qpos_adr + 1])
+                        ball_x = float(data.qpos[policy.ball_qpos_adr + 0]) if policy.ball_qpos_adr is not None else robot_x
+                        ball_y = float(data.qpos[policy.ball_qpos_adr + 1]) if policy.ball_qpos_adr is not None else robot_y
+                        render_cam.lookat = [0.65 * robot_x + 0.35 * ball_x, 0.65 * robot_y + 0.35 * ball_y, 0.16]
                     renderer.update_scene(data, render_cam)
                     rgb = renderer.render()
                     if Image is not None:
@@ -2194,15 +2576,89 @@ def main():
                             state_color = (200, 200, 200)
                         draw.text((10, 2), "MICRODUCK AUTONOMOUS FETCH", fill=(255, 255, 255))
                         draw.text((10, 13), f"[{policy.fetch_state}] {desc}", fill=state_color)
+
+                        # PiP Robot Eye Camera in TOP-RIGHT corner with YOLO target detection
+                        if head_renderer is not None and pip_cam is not None and policy.ball_qpos_adr is not None:
+                            ball_pos = data.qpos[policy.ball_qpos_adr:policy.ball_qpos_adr + 3]
+                            robot_pos = data.qpos[qpos_adr:qpos_adr + 2]
+                            dx = float(ball_pos[0] - robot_pos[0])
+                            dy = float(ball_pos[1] - robot_pos[1])
+                        # PiP Robot Eye Camera in TOP-RIGHT corner with dynamic target pin dot
+                        if head_renderer is not None and pip_cam is not None:
+                            head_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "jaw_soft")
+                            if head_bid >= 0:
+                                head_pos = data.xpos[head_bid]
+                                head_rot = data.xmat[head_bid].reshape(3, 3)
+                                head_fwd = -head_rot[:, 2]
+                                head_up = head_rot[:, 0]
+                                cam_pos = head_pos + head_fwd * 0.08 + head_up * 0.015
+                                head_yaw_deg = math.degrees(math.atan2(head_fwd[1], head_fwd[0]))
+                                gaze_target = cam_pos + head_fwd * 0.60 - head_up * 0.22
+                            else:
+                                robot_pos = data.qpos[qpos_adr:qpos_adr + 3]
+                                cam_pos = robot_pos + np.array([0.08, 0, 0.25])
+                                head_yaw_deg = 0.0
+                                gaze_target = cam_pos + np.array([0.60, 0, -0.22])
+
+                            pip_cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+                            pip_cam.lookat = [float(ball_pos[0]), float(ball_pos[1]), 0.035]
+                            pip_cam.distance = max(0.45, float(math.hypot(dx, dy)))
+                            pip_cam.lookat = [float(gaze_target[0]), float(gaze_target[1]), float(gaze_target[2])]
+                            pip_cam.distance = 0.60
+                            pip_cam.elevation = -22.0
+                            pip_cam.azimuth = math.degrees(math.atan2(dy, dx))
+                            pip_cam.azimuth = head_yaw_deg
+                            head_renderer.update_scene(data, pip_cam)
+                            head_rgb = head_renderer.render()
+                            head_img = Image.fromarray(head_rgb)
+                            head_draw = ImageDraw.Draw(head_img)
+                            hw, hh = head_img.width, head_img.height
+
+                            # 1. Camera center crosshair (tâm ngắm của mắt robot)
+                            cw, ch = hw // 2, hh // 2
+                            head_draw.line([(cw - 10, ch), (cw - 3, ch)], fill=(220, 220, 220), width=1)
+                            head_draw.line([(cw + 3, ch), (cw + 10, ch)], fill=(220, 220, 220), width=1)
+                            head_draw.line([(cw, ch - 10), (cw, ch - 3)], fill=(220, 220, 220), width=1)
+                            head_draw.line([(cw, ch + 3), (cw, ch + 10)], fill=(220, 220, 220), width=1)
+                            # 2. YOLO Ball Visual Detection & Dynamic Pin Dot (ghim tâm quả bóng di chuyển theo xê dịch)
+                            if policy.ball_qpos_adr is not None:
+                                mask = (head_rgb[:, :, 0] > 180) & (head_rgb[:, :, 1] > 80) & (head_rgb[:, :, 1] < 190) & (head_rgb[:, :, 2] < 70)
+                                coords = np.argwhere(mask)
+                                if len(coords) >= 6:
+                                    min_y, min_x = np.min(coords, axis=0)
+                                    max_y, max_x = np.max(coords, axis=0)
+                                    cx = int((min_x + max_x) // 2)
+                                    cy = int((min_y + max_y) // 2)
+
+                                    # Dynamic aiming line connecting camera center to ball pin dot
+                                    head_draw.line([(cw, ch), (cx, cy)], fill=(255, 220, 50), width=1)
+
+                                    # Red target pin dot with white outline right on the ball center
+                                    r_dot = 3
+                                    head_draw.ellipse([cx - r_dot, cy - r_dot, cx + r_dot, cy + r_dot], fill=(255, 40, 40), outline=(255, 255, 255))
+
+                                    # Reticle ring around ball
+                                    r_ring = max(max_x - min_x, max_y - min_y) // 2 + 4
+                                    head_draw.ellipse([cx - r_ring, cy - r_ring, cx + r_ring, cy + r_ring], outline=(225, 30, 225), width=2)
+
+                                    # Magenta FETCH tag badge
+                                    tag_w, tag_h = 44, 15
+                                    bx0, by0 = cx - tag_w // 2, cy - r_ring - tag_h - 2
+                                    head_draw.rectangle([bx0, by0, bx0 + tag_w, by0 + tag_h], fill=(215, 30, 215))
+                                    head_draw.text((bx0 + 6, by0 + 1), "FETCH", fill=(255, 255, 255))
+
+                            # Clean dark inset border
+                            head_draw.rectangle([0, 0, hw - 1, hh - 1], outline=(40, 50, 60), width=2)
+                            img.paste(head_img, (img.width - hw - 8, 8))
+
                         record_frames.append(img)
                     else:
                         record_frames.append(rgb)
 
-                if args.auto_toss and policy.fetch_state == "RELEASE" and policy.fetch_state_time > 1.2:
-                    print("\n[Auto-Toss] Autonomous fetch sequence completed successfully!")
-                    break
                 if (args.record_gif or args.record_video) and (control_step_count * control_dt >= args.record_duration):
                     print("\n[Recording] Max recording duration reached!")
+                if (args.record_gif or args.record_video or args.headless) and (control_step_count * control_dt >= args.record_duration):
+                    print("\n[Simulation] Max duration reached!")
                     break
 
                 if policy_enabled:
@@ -2237,12 +2693,13 @@ def main():
                     avg_yaw = sum(v[2] for v in vel_history) / n
                     cmd_x, cmd_y, cmd_yaw = policy.vel_cmd[0], policy.vel_cmd[1], policy.vel_cmd[2]
                     trunk_z = float(data.qpos[qpos_adr + 2])
-                    print(
-                        f"[vel 1s avg] achieved/cmd  fwd={avg_fwd:+.2f}/{cmd_x:+.2f}  "
-                        f"lat={avg_lat:+.2f}/{cmd_y:+.2f} m/s  "
-                        f"yaw={avg_yaw:+.2f}/{cmd_yaw:+.2f} rad/s   "
-                        f"trunk_z={trunk_z*1000:.1f} mm"
-                    )
+                    if abs(cmd_x) > 0.01 or abs(cmd_y) > 0.01 or abs(cmd_yaw) > 0.01:
+                        print(
+                            f"[vel 1s avg] achieved/cmd  fwd={avg_fwd:+.2f}/{cmd_x:+.2f}  "
+                            f"lat={avg_lat:+.2f}/{cmd_y:+.2f} m/s  "
+                            f"yaw={avg_yaw:+.2f}/{cmd_yaw:+.2f} rad/s   "
+                            f"trunk_z={trunk_z*1000:.1f} mm"
+                        )
 
                 if csv_data is not None:
                     obs = policy.get_observations()
@@ -2293,6 +2750,7 @@ def main():
                         print(f"  Applied ctrl ({ctrl_kind}, first 5): {data.ctrl[:5]}")
                         print(f"  Applied ctrl ({ctrl_kind}, last 5):  {data.ctrl[-5:]}")
 
+                t_sim_0 = time.perf_counter()
                 for _ in range(decimation):
                     if policy.ball_held and policy.ball_qpos_adr is not None and policy.mouth_tip_site_id >= 0:
                         hold_z = max(0.035, float(data.site_xpos[policy.mouth_tip_site_id][2]))
@@ -2311,19 +2769,64 @@ def main():
                         # dofs so MuJoCo's solver applies it on this step.
                         bam_ctrl.update()
                     mujoco.mj_step(model, data)
+                sim_durations.append(time.perf_counter() - t_sim_0)
 
                 if odom_compare is not None:
                     odom_compare.step(data)
                     if control_step_count % 50 == 0:
                         odom_compare.print_status(data)
+                if viewer.user_scn is not None:
+                    viewer.user_scn.ngeom = 0
                 if odom_overlay is not None:
                     odom_overlay.draw(data, viewer.user_scn, odom_compare)
-                viewer.sync()
+                if target_overlay is not None and viewer.user_scn is not None:
+                    target_overlay.draw(data, viewer.user_scn)
 
-                elapsed = time.time() - step_start
+                t_sync_0 = time.perf_counter()
+                viewer.sync()
+                sync_durations.append(time.perf_counter() - t_sync_0)
+
+                elapsed = time.perf_counter() - step_start
+                step_durations.append(elapsed)
+                fps_window_steps += 1
+
                 sleep_time = control_dt - elapsed
-                if sleep_time > 0:
+                if 0.0 < sleep_time <= control_dt:
                     time.sleep(sleep_time)
+
+                # Every ~1 second: compute precise measured FPS and timing breakdown
+                now = time.perf_counter()
+                if (now - fps_window_start) >= 1.0 and len(step_durations) > 0:
+                    measured_fps = fps_window_steps / (now - fps_window_start)
+                    avg_step_ms = (sum(step_durations) / len(step_durations)) * 1000.0
+                    avg_sim_ms = (sum(sim_durations) / len(sim_durations)) * 1000.0
+                    avg_sync_ms = (sum(sync_durations) / len(sync_durations)) * 1000.0
+
+                    # Render native zero-overhead HUD text directly inside MuJoCo viewer
+                    if viewer is not None and hasattr(viewer, "set_texts"):
+                        hud_l = f"FPS: {measured_fps:4.1f} Hz  (step: {avg_step_ms:3.1f}ms)\nSim: {avg_sim_ms:3.1f}ms  Sync: {avg_sync_ms:3.1f}ms"
+                        st_name = f"FETCH: {policy.fetch_state}" if policy.fetch_mode else f"MODE: {policy.current_policy.upper()}"
+                        hud_r = f"{st_name}\nCmd: [{policy.vel_cmd[0]:+.2f}, {policy.vel_cmd[1]:+.2f}, {policy.vel_cmd[2]:+.2f}]"
+                        try:
+                            viewer.set_texts([
+                                (mujoco.mjtFontScale.mjFONTSCALE_100, mujoco.mjtGridPos.mjGRID_TOPLEFT, hud_l, hud_r)
+                            ])
+                        except Exception:
+                            pass
+
+                    # Print FPS report to terminal
+                    mode_tag = f"[{policy.fetch_state}]" if policy.fetch_mode else f"[{policy.current_policy}]"
+                    print(
+                        f"[FPS: {measured_fps:4.1f} Hz] Step: {avg_step_ms:4.1f}ms "
+                        f"(Sim: {avg_sim_ms:3.1f}ms, Sync: {avg_sync_ms:3.1f}ms) | "
+                        f"{mode_tag} Cmd: [{policy.vel_cmd[0]:+.2f}, {policy.vel_cmd[1]:+.2f}, {policy.vel_cmd[2]:+.2f}]"
+                    )
+
+                    fps_window_start = now
+                    fps_window_steps = 0
+                    step_durations.clear()
+                    sim_durations.clear()
+                    sync_durations.clear()
 
         except KeyboardInterrupt:
             print("\n\nKeyboardInterrupt received (Ctrl+C). Saving data...")
