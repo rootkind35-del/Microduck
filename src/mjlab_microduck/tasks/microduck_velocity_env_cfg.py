@@ -338,11 +338,13 @@ def make_microduck_velocity_env_cfg(
     cfg.rewards["body_ang_vel"].weight = -0.05
     cfg.rewards["angular_momentum"].weight = -0.02
 
-    # Velocity tracking rewards
-    cfg.rewards["track_linear_velocity"].weight = 2.0
-    cfg.rewards["track_linear_velocity"].params["std"] = math.sqrt(0.1)
-    cfg.rewards["track_angular_velocity"].weight = 2.0
-    cfg.rewards["track_angular_velocity"].params["std"] = math.sqrt(0.5)
+    # Velocity tracking rewards: tight std (0.12) and high weight (3.5)
+    # eliminate the zero-velocity stagnation basin where standing still previously
+    # scored 80% of max reward. Now standing still pays almost zero, forcing forward locomotion.
+    cfg.rewards["track_linear_velocity"].weight = 3.5
+    cfg.rewards["track_linear_velocity"].params["std"] = 0.12
+    cfg.rewards["track_angular_velocity"].weight = 2.5
+    cfg.rewards["track_angular_velocity"].params["std"] = 0.20
 
     # Action smoothness: stage-0 value; the action_rate_weight curriculum below
     # ramps it -0.1 → -1.0 by iter 1500.
@@ -1050,19 +1052,15 @@ def make_microduck_velocity_env_cfg(
         del cfg.curriculum["terrain_levels"]
     del cfg.curriculum["command_vel"]
 
-    # head_pose_bias ramp: OFF until iter 600, then 1.0 → 3.0 by iter 1500.
-    # Held at 0 early because a posture-precision term is a distraction before
-    # a gait exists. At weight 3.0 a 15° residual bias costs 0.79/step and a
-    # 2° bias costs 0.10/step.
+    # head_pose_bias: start with weight 2.0 from step 0 so the 38% head mass
+    # is stiffly locked to neutral pitch, preventing head droop and nose-dive collapse.
     cfg.curriculum["head_pose_bias_weight"] = CurriculumTermCfg(
         func=microduck_mdp.reward_weight,
         params={
             "reward_name": "head_pose_bias",
             "weight_stages": [
-                {"step": 0, "weight": 0.0},
-                {"step": 600 * NUM_STEPS_PER_ENV, "weight": 1.0},
-                {"step": 1000 * NUM_STEPS_PER_ENV, "weight": 2.0},
-                {"step": 1500 * NUM_STEPS_PER_ENV, "weight": 3.0},
+                {"step": 0, "weight": 2.0},
+                {"step": 300 * NUM_STEPS_PER_ENV, "weight": 3.0},
             ],
         },
     )

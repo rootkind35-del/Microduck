@@ -323,9 +323,23 @@ def make_microduck_stairs_env_cfg(
     cfg.rewards["pose"].params["std_walking"] = std_walking
     cfg.rewards["pose"].params["std_running"] = std_walking
 
-    # Set forward velocity tracking weight to 3.5 to actively propel robot up the stairs
+    # Set forward velocity tracking weight to 3.5 with tight std (0.12) to actively propel robot up the stairs
     if "track_linear_velocity" in cfg.rewards:
         cfg.rewards["track_linear_velocity"].weight = 3.5
+        cfg.rewards["track_linear_velocity"].params["std"] = 0.12
+
+    # Double support stagnation penalty: penalize freezing in double-support when commanded forward
+    cfg.rewards["double_support_stagnation"] = RewardTermCfg(
+        func=microduck_mdp.double_support_stagnation_penalty,
+        weight=3.0,
+        params={
+            "sensor_name": "feet_ground_contact",
+            "contact_force_thresh": 2.0,
+            "command_name": "twist",
+            "cmd_threshold": 0.03,
+            "max_double_time_s": 0.30,
+        },
+    )
 
     # Heading lock: lock base heading straight ahead to prevent lateral spin and yaw instability
     if "heading_hold" in cfg.rewards:
