@@ -95,7 +95,7 @@ def main():
         data.qpos[qpos_adr + 2] = 0.125
         data.qpos[qpos_adr + 3:qpos_adr + 7] = [1, 0, 0, 0]
         for i, qidx in enumerate(model.jnt_qposadr[1:15]):
-            data.qpos[qidx] = ip.DEFAULT_JOINT_POS[i]
+            data.qpos[qidx] = ip.DEFAULT_POSE[i]
         if bam_ctrl is not None:
             bam_ctrl.reset(data.qpos)
         mujoco.mj_forward(model, data)
@@ -129,7 +129,7 @@ def main():
             action = session.run([output_name], {input_name: obs})[0][0]
             prev_action = action.copy()
 
-            target_pos = ip.DEFAULT_JOINT_POS + action * 1.0
+            target_pos = ip.DEFAULT_POSE + action * 1.0
             if bam_ctrl is not None:
                 bam_ctrl.set_position_targets(target_pos)
 
@@ -202,3 +202,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
