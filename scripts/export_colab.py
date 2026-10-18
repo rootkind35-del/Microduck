@@ -79,19 +79,33 @@ def main():
 
     print("\n[✓] Export complete for:", exported_files)
 
-    # Check if running in Google Colab and trigger download
+    # Trigger download in Google Colab (handles both in-process and system python fallback)
+    colab_download_success = False
     try:
-        import google.colab
         from google.colab import files
         print("\n[Google Colab Detected] Triggering automatic download of exported ONNX models...")
         for f in exported_files:
             print(f"  -> Downloading {f}...")
             files.download(f)
+        colab_download_success = True
     except ImportError:
-        print("\n[Local Environment] Files saved in current directory:")
+        # Fallback: uv venv might not have google.colab, try using system python
+        if os.path.exists("/usr/bin/python3"):
+            for f in exported_files:
+                res = subprocess.run(["/usr/bin/python3", "-c", f"from google.colab import files; files.download('{f}')"], capture_output=True)
+                if res.returncode == 0:
+                    print(f"\n[✓] Triggered browser download for: {f}")
+                    colab_download_success = True
+
+    if not colab_download_success:
+        print("\n[*] To download the exported models from Colab, run in a code cell:")
         for f in exported_files:
-            print(f"  -> {os.path.abspath(f)}")
+            print(f"    from google.colab import files; files.download('{f}')")
+        print("\n[*] Files saved on disk:")
+        for f in exported_files:
+            print(f"    -> {os.path.abspath(f)}")
 
 
 if __name__ == "__main__":
     main()
+
