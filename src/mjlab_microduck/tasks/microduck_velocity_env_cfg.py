@@ -198,7 +198,7 @@ def make_microduck_velocity_env_cfg(
 
     std_standing = {
         # Lower body — tighter to keep the robot in home pose when standing
-        r".*hip_yaw.*": 0.1,
+        r".*hip_yaw.*": 0.05,   # 0.1→0.05 — lock feet strictly parallel to forward heading
         r".*hip_roll.*": 0.05,  # 0.1→0.06→0.05 — hold the 5°-inward stance (sole sits flat), stop leg splay
         r".*hip_pitch.*": 0.15,
         r".*knee.*": 0.15,
@@ -207,11 +207,11 @@ def make_microduck_velocity_env_cfg(
 
     std_walking = {
         # Lower body
-        r".*hip_yaw.*": 0.3,
+        r".*hip_yaw.*": 0.08,   # 0.3→0.08 (~4.6°) — strictly force feet parallel, prevent V-splay duck waddle
         r".*hip_roll.*": 0.05,  # 0.1→0.06→0.05 — hold the 5°-inward stance, stop the leg splay to vertical
         r".*hip_pitch.*": 0.4,
         r".*knee.*": 0.4,
-        r".*ankle.*": 0.25, # was 0.15
+        r".*ankle.*": 0.25, # was 0.15
     }
 
     site_names = ["left_foot", "right_foot"]
