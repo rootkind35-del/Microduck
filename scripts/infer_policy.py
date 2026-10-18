@@ -2346,8 +2346,12 @@ def main():
 
     def handle_key(key):
         nonlocal policy_enabled, quit_requested
+        # Map common Vietnamese IME (Unikey/EVKey) characters to standard controls
+        _VN_MAP = {"ư": "w", "đ": "d", "â": "a", "ă": "a", "s": "s"}
+        key = _VN_MAP.get(key, key)
         try:
             if key in ("up", "down", "left", "right", "a", "e", "w", "s", "d", " "):
+
                 if policy.fetch_mode and not policy.head_mode and not policy.body_pose_mode:
                     policy.fetch_mode = False
                     policy.head_offset[:] = 0.0

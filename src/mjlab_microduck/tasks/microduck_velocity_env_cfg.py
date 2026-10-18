@@ -348,13 +348,64 @@ def make_microduck_velocity_env_cfg(
     # ramps it -0.1 → -1.0 by iter 1500.
     cfg.rewards["action_rate_l2"].weight = -0.1
 
-    cfg.rewards["foot_clearance"].weight = -3.0
-    cfg.rewards["foot_clearance"].params["command_threshold"] = 0.01
-    cfg.rewards["foot_clearance"].params["target_height"] = 0.035  # 3.5 cm to clear rough terrain / cobblestones / stairs
+    # 1. One-sided obstacle clearance penalty (only penalizes shortfall < 3.5cm; lifting higher is FREE)
+    cfg.rewards["foot_clearance"] = RewardTermCfg(
+        func=microduck_mdp.stairs_foot_clearance_penalty,
+        weight=2.0,
+        params={
+            "target_height": 0.035,
+            "height_sensor_name": "foot_height_scan",
+            "command_name": "twist",
+            "command_threshold": 0.01,
+            "vel_threshold": 0.02,
+        },
+    )
 
-    cfg.rewards["foot_swing_height"].weight = -1.5
-    cfg.rewards["foot_swing_height"].params["command_threshold"] = 0.01
-    cfg.rewards["foot_swing_height"].params["target_height"] = 0.035  # 3.5 cm to force high foot swing over obstacles
+    # 2. Smooth high-step clearance reward (active elevation on swing leg)
+    cfg.rewards["smooth_high_step_clearance"] = RewardTermCfg(
+        func=microduck_mdp.smooth_high_step_clearance_reward,
+        weight=2.0,
+        params={
+            "height_sensor_name": "foot_height_scan",
+            "sensor_name": "feet_ground_contact",
+            "target_clearance": 0.038,
+            "clearance_std": 0.015,
+            "swing_force_thresh": 1.5,
+            "command_name": "twist",
+            "cmd_threshold": 0.02,
+        },
+    )
+
+    # 3. Active swing knee flexion: flexes knee to elevate swing foot over rough terrain
+    cfg.rewards["swing_knee_flexion"] = RewardTermCfg(
+        func=microduck_mdp.swing_knee_flexion_reward,
+        weight=2.0,
+        params={
+            "sensor_name": "feet_ground_contact",
+            "stance_force_thresh": 3.5,
+            "swing_force_thresh": 1.5,
+            "target_knee_flex": 0.45,
+            "knee_std": 0.20,
+            "command_name": "twist",
+            "cmd_threshold": 0.02,
+        },
+    )
+
+    # 4. Swing foot sole leveling: maintains horizontal sole pitch (0 deg) to eliminate toe-stubbing
+    cfg.rewards["swing_foot_sole_leveling"] = RewardTermCfg(
+        func=microduck_mdp.swing_foot_sole_leveling_reward,
+        weight=1.5,
+        params={
+            "sensor_name": "feet_ground_contact",
+            "stance_force_thresh": 3.5,
+            "swing_force_thresh": 1.5,
+            "command_name": "twist",
+            "cmd_threshold": 0.02,
+        },
+    )
+
+    # Remove conflicting symmetric foot_swing_height penalty
+    cfg.rewards.pop("foot_swing_height", None)
 
     # NOTE: no neck-only action-rate term — the shared action_rate_l2 sums over
     # ALL action dims (neck included), and head_pose_tracking below gives the
