@@ -404,6 +404,69 @@ def make_microduck_velocity_env_cfg(
         },
     )
 
+    # 5. Coronal pelvic sway: lateral hip roll sway synchronized with foot swing for LIPM balance
+    cfg.rewards["coronal_pelvic_sway"] = RewardTermCfg(
+        func=microduck_mdp.coronal_pelvic_sway_reward,
+        weight=2.5,
+        params={
+            "sensor_name": "feet_ground_contact",
+            "stance_force_thresh": 3.0,
+            "swing_force_thresh": 1.5,
+            "target_sway_deg": 6.0,
+            "sway_std_deg": 3.0,
+            "command_name": "twist",
+            "cmd_threshold": 0.02,
+        },
+    )
+
+    # 6. Torso forward pitch lean: anticipatory postural adjustment (APA) to keep CoM ahead of stance feet
+    cfg.rewards["torso_forward_pitch"] = RewardTermCfg(
+        func=microduck_mdp.torso_forward_pitch_reward,
+        weight=2.0,
+        params={
+            "command_name": "twist",
+            "cmd_threshold": 0.02,
+            "target_forward_lean": 0.08,
+            "lean_std": 0.05,
+        },
+    )
+
+    # 7. Double-support stagnation penalty: heavily penalizes freezing/standing still when forward walking is commanded
+    cfg.rewards["double_support_stagnation"] = RewardTermCfg(
+        func=microduck_mdp.double_support_stagnation_penalty,
+        weight=2.5,  # self-negating <= 0 -> positive weight
+        params={
+            "sensor_name": "feet_ground_contact",
+            "contact_force_thresh": 2.0,
+            "command_name": "twist",
+            "cmd_threshold": 0.02,
+            "max_double_time_s": 0.35,
+        },
+    )
+
+    # 8. Fallen persistence penalty: heavily penalizes lying still/frozen on the ground
+    cfg.rewards["fallen_persistence"] = RewardTermCfg(
+        func=microduck_mdp.fallen_persistence_penalty,
+        weight=3.0,  # self-negating <= 0 -> positive weight
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=("trunk_base",)),
+            "gate_tilt_above_deg": 35.0,
+            "grace_period_s": 0.4,
+            "max_penalty_scale": 5.0,
+        },
+    )
+
+    # 9. Servo stall penalty: penalizes servos jammed or pushing against locked limbs
+    cfg.rewards["servo_stall"] = RewardTermCfg(
+        func=microduck_mdp.servo_stall_penalty,
+        weight=-0.02,  # mjlab cost >= 0 -> negative weight
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "torque_thresh": 0.40,
+            "vel_thresh": 0.30,
+        },
+    )
+
     # Remove conflicting symmetric foot_swing_height penalty
     cfg.rewards.pop("foot_swing_height", None)
 
@@ -428,14 +491,29 @@ def make_microduck_velocity_env_cfg(
         "asset_cfg"
     ].geom_names = foot_frictions_geom_names
     cfg.events["foot_friction"].params["ranges"] = (0.7, 1.3)  # Grippier footpad — narrowed from (0.3, 1.2)
-    # Terminate environments that have gone numerically unstable (NaN physics).
-    # MuJoCo can produce NaN joint positions on extreme contact impulses.
-    # Terminating immediately resets to a valid state before NaN propagates
-    # into the observation buffer and corrupts network weights.
+
+    # Terminations & Early Stopping on failure:
+    # 1. Terminate environments that have gone numerically unstable (NaN physics).
     cfg.terminations["nan_state"] = TerminationTermCfg(
         func=microduck_mdp.robot_state_is_nan,
         time_out=False,
         params={"sensor_names": (feet_ground_cfg.name,)},
+    )
+
+    # 2. Tightened fell_over termination: cut off episode immediately if tilted > 55 deg
+    if "fell_over" in cfg.terminations:
+        cfg.terminations["fell_over"].params["limit_angle"] = math.radians(55.0)
+
+    # 3. Fallen too long termination: stop episode early if stuck fallen/prone for > 0.8s
+    cfg.terminations["fallen_too_long"] = TerminationTermCfg(
+        func=microduck_mdp.fallen_too_long,
+        time_out=False,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=("trunk_base",)),
+            "gate_z_below": 0.09,
+            "gate_tilt_above_deg": 35.0,
+            "max_duration_s": 0.8,
+        },
     )
 
     cfg.events["reset_base"].params["pose_range"]["z"] = (0.12, 0.13)
