@@ -131,7 +131,9 @@ def main():
 
             target_pos = ip.DEFAULT_POSE + action * 1.0
             if bam_ctrl is not None:
-                bam_ctrl.set_position_targets(target_pos)
+                bam_ctrl.q_target[:] = target_pos
+            else:
+                data.ctrl[:] = target_pos
 
             for _ in range(decimation):
                 if bam_ctrl is not None:
