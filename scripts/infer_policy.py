@@ -13,8 +13,13 @@ import sys
 import termios
 import threading
 import time
-import tty
 import numpy as np
+
+# Force WSLg Mesa D3D12 to use dedicated NVIDIA GPU instead of integrated Intel GPU
+# (prevents window freeze / 'Not Responding' white-screen in WSL2)
+if "MESA_D3D12_DEFAULT_ADAPTER_NAME" not in os.environ:
+    os.environ["MESA_D3D12_DEFAULT_ADAPTER_NAME"] = "NVIDIA"
+
 import mujoco
 import mujoco.viewer
 import onnxruntime as ort
@@ -256,6 +261,7 @@ class PolicyInference:
                  roulade_onnx_path=None,
                  standup_onnx_path=None,
                  fetch_onnx_path=None,
+                 stairs_onnx_path=None,
                  kick_duration=3.0, roulade_duration=2.0, standup_duration=3.5):
         self.bam_ctrl = bam_ctrl  # bam.mujoco.MujocoController (None = legacy position actuators)
         self.model = model
@@ -408,22 +414,44 @@ class PolicyInference:
             self.fetch_session = _create_optimized_ort_session(fetch_onnx_path, "Fetch policy")
             print(f"Fetch policy input shape: {self.fetch_session.get_inputs()[0].shape}")
 
-        # Validate at least one policy loaded. A sitstand policy can run alone
-        # (it holds the stand at flag=0), unlike the old one-way sit policy.
-        if not self.walking_session and not self.standing_session and not self.is_sitstand:
-            raise ValueError("At least one of --walking, --standing or --sitstand must be provided")
+        # Load stairs policy if provided
+        self.stairs_session = None
+        self.stairs_mode = False
+        if stairs_onnx_path:
+            print(f"\nLoading stairs policy from: {stairs_onnx_path}")
+            self.stairs_session = _create_optimized_ort_session(stairs_onnx_path, "Stairs policy")
+            print(f"Stairs policy input shape: {self.stairs_session.get_inputs()[0].shape}")
+            self.stairs_mode = True
+        elif walking_onnx_path and "stairs" in os.path.basename(walking_onnx_path).lower():
+            # If user loaded a stairs policy via --walking
+            self.stairs_session = self.walking_session
+            self.stairs_mode = True
+
+        # Validate at least one policy loaded.
+        has_standup = "standup" in self.behavior_sessions
+        if not self.walking_session and not self.standing_session and not self.is_sitstand and not self.stairs_session and not has_standup:
+            raise ValueError("At least one policy (--walking, --standing, --stairs, --sitstand, or --standup) must be provided")
 
         # Determine initial active session and policy
-        if self.walking_session:
-            self.current_policy = "walking"
-            self.ort_session = self.walking_session
-        elif self.standing_session:
+        if self.standing_session:
             self.current_policy = "standing"
             self.ort_session = self.standing_session
-        else:
+            if self.stairs_session:
+                self.stairs_mode = True
+        elif self.stairs_session and not self.walking_session:
+            self.current_policy = "stairs"
+            self.ort_session = self.stairs_session
+            self.stairs_mode = True
+        elif self.walking_session:
+            self.current_policy = "stairs" if self.stairs_mode else "walking"
+            self.ort_session = self.walking_session
+        elif self.is_sitstand:
             # sitstand-only: start standing (posture flag 0).
             self.current_policy = "sit"
             self.ort_session = self.sit_session
+        elif has_standup:
+            self.current_policy = "standup"
+            self.ort_session = self.behavior_sessions["standup"]
 
         # Get input/output names from active session
         self.input_name = self.ort_session.get_inputs()[0].name
@@ -597,7 +625,7 @@ class PolicyInference:
                 return
             cmd = np.zeros(13, dtype=np.float32)
             # twist slot (or phase encoding for ground_pick — overwritten there)
-            if self.current_policy == "walking":
+            if self.current_policy in ("walking", "stairs"):
                 cmd[0:3] = self.vel_cmd
             elif self.current_policy == "sit" and self.is_sitstand:
                 # Sitstand posture flag: 1 = sit, 0 = stand. NOT zeros — the
@@ -630,8 +658,9 @@ class PolicyInference:
         # ground_pick: command is set directly by update_ground_pick_phase
 
     def _update_policy_session(self):
-        """Switch between walking and standing sessions based on vel_cmd magnitude."""
-        if not (self.walking_session and self.standing_session):
+        """Switch between active movement policy (stairs/walking) and standing sessions based on vel_cmd magnitude."""
+        active_motion_session = self.stairs_session if (self.stairs_session and self.stairs_mode) else self.walking_session
+        if not (active_motion_session and self.standing_session):
             return  # Only one policy loaded, no switching
         if self.ground_pick_mode:
             return  # Don't switch during ground pick
@@ -643,10 +672,16 @@ class PolicyInference:
             return  # Don't switch during a kick/roulade
 
         magnitude = float(np.linalg.norm(self.vel_cmd))
-        new_policy = "standing" if magnitude <= self.switch_threshold else "walking"
+        if magnitude <= self.switch_threshold:
+            new_policy = "standing"
+            target_session = self.standing_session
+        else:
+            new_policy = "stairs" if (self.stairs_session and self.stairs_mode) else "walking"
+            target_session = active_motion_session
+
         if new_policy != self.current_policy:
             self.current_policy = new_policy
-            self.ort_session = self.standing_session if new_policy == "standing" else self.walking_session
+            self.ort_session = target_session
             print(f"Switched to {self.current_policy} policy (vel magnitude: {magnitude:.3f})")
             self._update_command()
 
@@ -1447,12 +1482,15 @@ class PolicyInference:
         name = self.behavior_mode
         self.behavior_mode = None
         self.vel_cmd = np.zeros(3, dtype=np.float32)
-        if self.walking_session:
-            self.current_policy = "walking"
-            self.ort_session = self.walking_session
-        elif self.standing_session:
+        if self.standing_session:
             self.current_policy = "standing"
             self.ort_session = self.standing_session
+        elif self.stairs_session and self.stairs_mode:
+            self.current_policy = "stairs"
+            self.ort_session = self.stairs_session
+        elif self.walking_session:
+            self.current_policy = "walking"
+            self.ort_session = self.walking_session
         else:
             # sitstand-only setup: the sitstand policy holds the stand (flag 0).
             self.current_policy = "sit"
@@ -1500,6 +1538,26 @@ class PolicyInference:
             print(f"Sit: OFF → back to {self.current_policy}")
         self._update_command()
 
+    def toggle_stairs_mode(self):
+        """Toggle stairs climbing policy on/off (J key)."""
+        if self.stairs_session is None:
+            print("Stairs policy unavailable: no --stairs policy loaded")
+            return
+        self.stairs_mode = not self.stairs_mode
+        if self.stairs_mode:
+            self.current_policy = "stairs"
+            self.ort_session = self.stairs_session
+            print("\n[STAIRS MODE] ON: Using stairs_climb policy for climbing!")
+        else:
+            if self.walking_session:
+                self.current_policy = "walking"
+                self.ort_session = self.walking_session
+            elif self.standing_session:
+                self.current_policy = "standing"
+                self.ort_session = self.standing_session
+            print(f"\n[STAIRS MODE] OFF: Switched back to {self.current_policy} policy.")
+        self._update_command()
+
     def toggle_head_mode(self):
         """Toggle head control mode on/off."""
         self.head_mode = not self.head_mode
@@ -1515,6 +1573,8 @@ class PolicyInference:
         sessions = []
         if self.walking_session:
             sessions.append(("walking", self.walking_session))
+        if self.stairs_session:
+            sessions.append(("stairs", self.stairs_session))
         if self.standing_session:
             sessions.append(("standing", self.standing_session))
         if self.ground_pick_session:
@@ -1551,6 +1611,8 @@ class PolicyInference:
             target_positions = self.default_pose + delayed_action * self.action_scale
         else:
             target_positions = self.default_pose + action * self.action_scale
+
+        # Note: Clean policy control without artificial hardcoded joint overrides
 
         # Apply head offset to neck/head joints (servos 5:9)
         if not self.new_cmd_obs or self.fetch_mode or np.any(self.head_offset != 0):
@@ -1895,8 +1957,10 @@ def main():
     parser = argparse.ArgumentParser(description="Run ONNX policy in MuJoCo")
     parser.add_argument("--roller", action="store_true", help="Use roller skate robot XML (robot_walk_rollers.xml)")
     parser.add_argument("--scene", type=str, default=None, help="Path to a scene XML, overriding the default pick (e.g. src/mjlab_microduck/robot/microduck/scene_allcollisions.xml)")
+    default_standing = "standing.onnx" if os.path.exists("standing.onnx") else None
     parser.add_argument("--walking", type=str, default=None, help="Path to walking policy ONNX file")
-    parser.add_argument("--standing", "-s", type=str, default=None, help="Path to standing policy ONNX file")
+    parser.add_argument("--standing", "-s", type=str, default=default_standing,
+                        help=f"Path to standing policy ONNX file (default: {default_standing})")
     parser.add_argument("--ground-pick", type=str, default=None, help="Path to ground pick policy ONNX file (press G to activate)")
     parser.add_argument("--sit", type=str, default=None, help="Path to OLD one-way sitting policy ONNX file (press Y to sit, Y again switches back to standing/walking policy)")
     parser.add_argument("--sitstand", type=str, default=None, help="Path to sitstand policy ONNX (commanded sit<->stand; press Y to sit, Y again the SAME policy stands back up). Requires --new-cmd-obs. Can run standalone.")
@@ -1904,7 +1968,9 @@ def main():
     parser.add_argument("--kick-left", type=str, default=None, help="Path to LEFT-foot ball kick policy ONNX (press K to trigger). Requires --new-cmd-obs. Loads a scene with a ball.")
     parser.add_argument("--kick-right", type=str, default=None, help="Path to RIGHT-foot ball kick policy ONNX (press L to trigger). Requires --new-cmd-obs. Loads a scene with a ball.")
     parser.add_argument("--roulade", type=str, default=None, help="Path to roulade (forward roll) policy ONNX (press R to trigger). Requires --new-cmd-obs.")
-    parser.add_argument("--standup", type=str, default=None, help="Path to standup policy ONNX (press U to trigger). Requires --new-cmd-obs.")
+    parser.add_argument("--standup", type=str,
+                        default="standup.onnx" if os.path.exists("standup.onnx") else None,
+                        help="Path to standup policy ONNX (press U to trigger). Requires --new-cmd-obs (default: standup.onnx if present).")
     parser.add_argument("--fetch", type=str, default=None, help="Path to fetch policy ONNX file (press F to activate auto-fetch)")
     parser.add_argument("--interactive", action="store_true", help="Use interactive scene (scene_interactive.xml)")
     parser.add_argument("--kick-duration", type=float, default=3.0, help="Seconds a kick policy stays active before handing back to standing/walking (default: 3.0)")
@@ -1913,6 +1979,12 @@ def main():
     parser.add_argument("--lin-vel-x", type=float, default=0.0, help="Initial linear velocity X command (m/s)")
     parser.add_argument("--lin-vel-y", type=float, default=0.0, help="Initial linear velocity Y command (m/s)")
     parser.add_argument("--ang-vel-z", type=float, default=0.0, help="Initial angular velocity Z command (rad/s)")
+    parser.add_argument("--spawn-x", type=float, default=0.0, help="Initial robot spawn X coordinate in meters (default: 0.0)")
+    parser.add_argument("--spawn-y", type=float, default=0.0, help="Initial robot spawn Y coordinate in meters (default: 0.0)")
+    parser.add_argument("--spawn-z", type=float, default=None, help="Initial robot spawn Z coordinate in meters (default: auto)")
+    parser.add_argument("--spawn-terrain", type=str, choices=["flat", "cobble", "stairs", "ramp"], default="flat",
+                        help="Spawn location preset in scene_rough.xml: 'flat' (x=0, y=0), 'cobble' (x=0.45, y=0 on rocks), "
+                             "'stairs' (x=0.45, y=0.45 on mini-stairs), 'ramp' (x=0.55, y=-0.45 on slope ramp)")
     parser.add_argument("--action-scale", type=float, default=1.0, help="Action scale (default: 1.0)")
     parser.add_argument("--raw-accelerometer", action="store_true", help="Use raw accelerometer instead of projected gravity")
     parser.add_argument("--delay", type=int, nargs='*', default=None, help="Enable actuator delay: --delay MIN MAX or --delay LAG")
@@ -1968,20 +2040,28 @@ def main():
                         help="Max recording duration in seconds (default: 18.0)")
     parser.add_argument("--headless", action="store_true",
                         help="Run simulation headless without opening the interactive viewer window")
+    parser.add_argument("--stairs", type=str, default=None,
+                        help="Path to stairs policy (e.g. stairs_climb.onnx)")
     parser.add_argument("--auto-toss", action="store_true",
                         help="Automatically toss the ball at t=0.5s to demonstrate the full Autonomous Fetch pipeline")
     parser.add_argument("--hud", action="store_true",
                         help="Display the in-viewer PiP camera HUD in top-right corner (off by default for maximum FPS)")
     args = parser.parse_args()
 
-    if not args.walking and not args.standing and not args.sitstand:
-        parser.error("At least one of --walking, --standing or --sitstand must be provided")
+    if args.walking and "stairs" in os.path.basename(args.walking).lower() and not args.stairs:
+        args.stairs = args.walking
+    if not args.walking and not args.standing and not args.sitstand and not args.stairs and not args.standup:
+        parser.error("At least one policy (--walking, --standing, --stairs, --sitstand, or --standup) must be provided")
+    if args.stairs:
+        args.new_cmd_obs = True
+        if args.scene is None or args.scene == MICRODUCK_XML:
+            args.scene = "src/mjlab_microduck/robot/microduck/scene_stairs.xml"
     if args.sitstand and not args.new_cmd_obs:
         parser.error("--sitstand policies use the unified 13D command obs (61D); add --new-cmd-obs")
-    if (args.kick_left or args.kick_right or args.roulade or args.standup) and not args.new_cmd_obs:
-        parser.error("--kick-left/--kick-right/--roulade/--standup policies use the unified 13D command obs (61D); add --new-cmd-obs")
-    if (args.kick_left or args.kick_right or args.roulade or args.standup) and args.roller:
-        parser.error("kick/roulade/standup policies are trained on the walking robot, not the roller model")
+    if (args.kick_left or args.kick_right or args.roulade or args.standup or args.stairs) and not args.new_cmd_obs:
+        parser.error("--kick-left/--kick-right/--roulade/--standup/--stairs policies use the unified 13D command obs (61D); add --new-cmd-obs")
+    if (args.kick_left or args.kick_right or args.roulade) and args.roller:
+        parser.error("kick/roulade policies are trained on the walking robot, not the roller model")
 
     # Parse delay arguments
     delay_min_lag = 0
@@ -2092,6 +2172,7 @@ def main():
         roulade_onnx_path=args.roulade,
         standup_onnx_path=args.standup,
         fetch_onnx_path=args.fetch,
+        stairs_onnx_path=args.stairs,
         kick_duration=args.kick_duration,
         roulade_duration=args.roulade_duration,
         standup_duration=args.standup_duration,
@@ -2128,9 +2209,30 @@ def main():
     # Set initial position to default pose
     freejoint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "trunk_base_freejoint")
     qpos_adr = model.jnt_qposadr[freejoint_id]
-    data.qpos[qpos_adr + 0] = 0.0
-    data.qpos[qpos_adr + 1] = 0.0
-    data.qpos[qpos_adr + 2] = 0.1385 if args.roller else 0.125  # rollers add 13.5mm height
+    spawn_x = args.spawn_x
+    spawn_y = args.spawn_y
+    spawn_z = args.spawn_z
+
+    if args.spawn_terrain == "cobble":
+        spawn_x = 0.45 if args.spawn_x == 0.0 else args.spawn_x
+        spawn_y = 0.00 if args.spawn_y == 0.0 else args.spawn_y
+        if spawn_z is None:
+            spawn_z = 0.130
+    elif args.spawn_terrain == "stairs":
+        spawn_x = 0.45 if args.spawn_x == 0.0 else args.spawn_x
+        spawn_y = 0.45 if args.spawn_y == 0.0 else args.spawn_y
+        if spawn_z is None:
+            spawn_z = 0.134
+    elif args.spawn_terrain == "ramp":
+        spawn_x = 0.55 if args.spawn_x == 0.0 else args.spawn_x
+        spawn_y = -0.45 if args.spawn_y == 0.0 else args.spawn_y
+        if spawn_z is None:
+            spawn_z = 0.140
+
+    default_z = 0.1385 if args.roller else 0.125
+    data.qpos[qpos_adr + 0] = spawn_x
+    data.qpos[qpos_adr + 1] = spawn_y
+    data.qpos[qpos_adr + 2] = spawn_z if spawn_z is not None else default_z
     data.qpos[qpos_adr + 3:qpos_adr + 7] = [1, 0, 0, 0]
     for i, qpos_idx in enumerate(policy.joint_qpos_indices):
         data.qpos[qpos_idx] = policy.default_pose[i]
@@ -2245,20 +2347,22 @@ def main():
     def handle_key(key):
         nonlocal policy_enabled, quit_requested
         try:
-            if key in ("up", "down", "left", "right", "a", "e", " "):
+            if key in ("up", "down", "left", "right", "a", "e", "w", "s", "d", " "):
                 if policy.fetch_mode and not policy.head_mode and not policy.body_pose_mode:
                     policy.fetch_mode = False
                     policy.head_offset[:] = 0.0
                     policy._update_command()
                     print("[Manual Control] Bàn phím can thiệp -> Tắt Auto-Fetch, trao toàn quyền điều khiển cho người dùng (bấm F để bật lại)")
 
-            if key == "up":
+            if key in ("up", "w"):
                 if policy.head_mode:
-                    policy.head_offset[1] = np.clip(policy.head_offset[1] + policy.head_step, -policy.head_max, policy.head_max)
-                    policy._update_command()
-                    print(f"Head offset: neck={policy.head_offset[0]:.2f} pitch={policy.head_offset[1]:.2f} yaw={policy.head_offset[2]:.2f} roll={policy.head_offset[3]:.2f}")
+                    if key == "up":
+                        policy.head_offset[1] = np.clip(policy.head_offset[1] + policy.head_step, -policy.head_max, policy.head_max)
+                        policy._update_command()
+                        print(f"Head offset: neck={policy.head_offset[0]:.2f} pitch={policy.head_offset[1]:.2f} yaw={policy.head_offset[2]:.2f} roll={policy.head_offset[3]:.2f}")
                 elif policy.body_pose_mode:
-                    policy.bump_body("z", policy.body_cmd_step_z)
+                    if key == "up":
+                        policy.bump_body("z", policy.body_cmd_step_z)
                 else:
                     policy.set_vel_cmd(policy.vel_max_x, 0.0, 0.0)
             elif key == "down":
@@ -2294,6 +2398,13 @@ def main():
                     policy.set_vel_cmd(policy.nominal_vel_x, 0.0, new_ang)
                 else:
                     policy.set_vel_cmd(policy.nominal_vel_x, policy.vel_step_y, 0.0)
+            elif key == "d":
+                if not policy.head_mode and not policy.body_pose_mode:
+                    if args.roller:
+                        new_ang = np.clip(policy.nominal_vel_ang - policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang)
+                        policy.set_vel_cmd(policy.nominal_vel_x, 0.0, new_ang)
+                    else:
+                        policy.set_vel_cmd(policy.nominal_vel_x, 0.0, -policy.vel_max_ang)
             elif key == " ":
                 if policy.head_mode:
                     policy.head_offset[:] = 0.0
@@ -2384,6 +2495,10 @@ def main():
                     print(f"Head offset: neck={policy.head_offset[0]:.2f} pitch={policy.head_offset[1]:.2f} yaw={policy.head_offset[2]:.2f} roll={policy.head_offset[3]:.2f}")
                 elif policy.body_pose_mode and policy.new_cmd_obs:
                     policy.bump_body("yaw", -policy.body_cmd_step_angle)
+                else:
+                    policy.set_vel_cmd(policy.vel_min_x, 0.0, 0.0)
+            elif key == "j":
+                policy.toggle_stairs_mode()
             elif key == "c":
                 policy.toggle_heading_lock()
             elif key == "v":
@@ -2393,15 +2508,16 @@ def main():
 
     print("\nKeyboard controls (type in THIS terminal — the viewer window no longer captures keys):")
     print("  [ Velocity mode (default) ]")
-    print("  UP arrow:         walk forward straight [lin_vel_x, 0, 0]")
-    print("  DOWN arrow:       walk backward straight [lin_vel_x, 0, 0]")
+    print("  UP arrow / W:     walk forward straight [lin_vel_x, 0, 0]")
+    print("  DOWN arrow / S:   walk backward straight [lin_vel_x, 0, 0]")
     if args.roller:
         print("  LEFT/RIGHT arrow: turn left/right (ang_vel_z heading error)")
-        print("  A / E:            turn left/right (ang_vel_z, incremental)")
+        print("  A / D (or E):     turn left/right (ang_vel_z, incremental)")
     else:
         print("  LEFT/RIGHT arrow: strafe left/right (lin_vel_y)")
-        print("  A / E:            turn left/right (ang_vel_z)")
+        print("  A / D (or E):     turn left/right (ang_vel_z)")
     print("  SPACE:            stop / coast (zero all commands)")
+    print("  J:                toggle Stairs Climbing mode (switch to/from --stairs policy)")
     print("  C:                toggle Heading-Lock (giữ tuyệt đối hướng đi thẳng/lùi)")
     print("  V:                toggle Terrain-Adaptive Auto-Slowdown (tự giảm tốc khi gặp gồ ghề)")
     print("  T:                toggle policy inference on/off (paused = motors hold last target)")
@@ -2507,7 +2623,6 @@ def main():
             pass
 
         try:
-            prev_step_time = time.perf_counter()
             fps_window_start = time.perf_counter()
             fps_window_steps = 0
             measured_fps = 0.0
@@ -2531,9 +2646,6 @@ def main():
                             set_standby_gains(False)
                             print("Policy inference enabled (after 1s standby)")
                             print(f"  Restored original kp gains (range: [{original_kp.min():.2f}, {original_kp.max():.2f}])")
-
-                if getattr(args, "auto_toss", False) and control_step_count == int(0.5 / control_dt):
-                    policy.trigger_fetch()
 
                 # Fixed simulation timestep for robot controller and autonomous state machine.
                 # MuJoCo physics steps by exactly control_dt (0.02s) on each control cycle;
@@ -2604,12 +2716,9 @@ def main():
                                 gaze_target = cam_pos + np.array([0.60, 0, -0.22])
 
                             pip_cam.type = mujoco.mjtCamera.mjCAMERA_FREE
-                            pip_cam.lookat = [float(ball_pos[0]), float(ball_pos[1]), 0.035]
-                            pip_cam.distance = max(0.45, float(math.hypot(dx, dy)))
                             pip_cam.lookat = [float(gaze_target[0]), float(gaze_target[1]), float(gaze_target[2])]
                             pip_cam.distance = 0.60
                             pip_cam.elevation = -22.0
-                            pip_cam.azimuth = math.degrees(math.atan2(dy, dx))
                             pip_cam.azimuth = head_yaw_deg
                             head_renderer.update_scene(data, pip_cam)
                             head_rgb = head_renderer.render()
@@ -2764,7 +2873,8 @@ def main():
                             data.site_xpos[policy.mouth_tip_site_id][1] + fwd_off[1],
                             hold_z,
                         ]
-                        data.qvel[policy.ball_qvel_adr:policy.ball_qvel_adr + 6] = 0.0
+                        if policy.ball_qvel_adr is not None:
+                            data.qvel[policy.ball_qvel_adr:policy.ball_qvel_adr + 6] = 0.0
                     if bam_ctrl is not None:
                         # BAM owns control/torque/friction: update() runs the
                         # firmware P-loop + DC-motor equation, writes the torque
@@ -2861,11 +2971,13 @@ def main():
         if args.record_gif:
             print(f"\nSaving animated GIF to: {args.record_gif}...")
             os.makedirs(os.path.dirname(args.record_gif) or '.', exist_ok=True)
-            quantized = [img.convert('P', palette=Image.ADAPTIVE, colors=128) if (Image and isinstance(img, Image.Image)) else Image.fromarray(img).convert('P', palette=Image.ADAPTIVE, colors=128) for img in record_frames]
-            duration_ms = int(1000.0 / args.record_fps)
-            quantized[0].save(args.record_gif, save_all=True, append_images=quantized[1:], optimize=True, duration=duration_ms, loop=0)
-            gif_mb = os.path.getsize(args.record_gif) / (1024 * 1024)
-            print(f"Saved animated GIF: {args.record_gif} ({len(record_frames)} frames, {gif_mb:.2f} MB)")
+            if Image is not None:
+                palette_mode = getattr(getattr(Image, "Palette", None), "ADAPTIVE", getattr(Image, "ADAPTIVE", 0))
+                quantized = [img.convert('P', palette=palette_mode, colors=128) if isinstance(img, Image.Image) else Image.fromarray(img).convert('P', palette=palette_mode, colors=128) for img in record_frames]
+                duration_ms = int(1000.0 / args.record_fps)
+                quantized[0].save(args.record_gif, save_all=True, append_images=quantized[1:], optimize=True, duration=duration_ms, loop=0)
+                gif_mb = os.path.getsize(args.record_gif) / (1024 * 1024)
+                print(f"Saved animated GIF: {args.record_gif} ({len(record_frames)} frames, {gif_mb:.2f} MB)")
         if args.record_video:
             print(f"\nSaving MP4 video to: {args.record_video}...")
             try:

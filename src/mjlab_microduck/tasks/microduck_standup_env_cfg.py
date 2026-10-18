@@ -145,6 +145,7 @@ from mjlab_microduck.tasks.microduck_velocity_env_cfg import (
     HEAD_BODY_NAMES,
     HEAD_POSE_CMD_RESAMPLE_S,
     BODY_POSE_CMD_RESAMPLE_S,
+    _soften_terrain_contacts,
 )
 from mjlab_microduck.tasks.symmetry import PpoWithSymmetryCfg, SYMMETRY_CFG
 
@@ -839,14 +840,18 @@ def make_microduck_standup_env_cfg(
         cfg.scene.terrain.terrain_generator = None
     else:
         cfg.scene.terrain.terrain_type = "generator"
-        cfg.scene.terrain.terrain_generator = MICRODUCK_ROUGH_TERRAINS_CFG
+        cfg.scene.terrain.terrain_generator = deepcopy(MICRODUCK_ROUGH_TERRAINS_CFG)
+        cfg.scene.spec_fn = _soften_terrain_contacts
+        cfg.sim.nconmax = 200
+        cfg.sim.mujoco.iterations = 30
+        cfg.sim.mujoco.ls_iterations = 50
         if play:
             cfg.scene.terrain.terrain_generator.curriculum = False
             cfg.scene.terrain.terrain_generator.num_cols = 5
             cfg.scene.terrain.terrain_generator.num_rows = 5
 
     # ── Curriculum ────────────────────────────────────────────────────────────
-    if not rough:
+    if "terrain_levels" in cfg.curriculum:
         del cfg.curriculum["terrain_levels"]
     del cfg.curriculum["command_vel"]
 
@@ -1155,5 +1160,5 @@ MicroduckStandUpRlCfg = RslRlOnPolicyRunnerCfg(
     run_name="microduck_stand",
     save_interval=250,
     num_steps_per_env=24,
-    max_iterations=15_000,
+    max_iterations=5_000,
 )

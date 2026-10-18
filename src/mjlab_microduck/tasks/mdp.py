@@ -2062,7 +2062,8 @@ def mouth_ground_proximity(
         target_height: Target z-height for the mouth tip (m). 0 = ground level.
     """
     asset = env.scene[asset_cfg.name]
-    mouth_z = asset.data.site_pos_w[:, asset_cfg.site_ids[0], 2]  # (num_envs,)
+    origin_z = env.scene.terrain.env_origins[:, 2] if hasattr(env.scene, "terrain") and hasattr(env.scene.terrain, "env_origins") else 0.0
+    mouth_z = asset.data.site_pos_w[:, asset_cfg.site_ids[0], 2] - origin_z  # (num_envs,)
     proximity = torch.exp(-((mouth_z - target_height) / std) ** 2)
 
     # Approach weight: max(0, sin(2π*phase)) — peaks at 1 at phase=0.25, zero at 0 and 0.5
@@ -3205,7 +3206,8 @@ def mouth_ground_proximity_phased(
 ) -> torch.Tensor:
     """mouth_ground_proximity gaté par la down-gate segmentée (descente+palier)."""
     asset = env.scene[asset_cfg.name]
-    mouth_z = asset.data.site_pos_w[:, asset_cfg.site_ids[0], 2]
+    origin_z = env.scene.terrain.env_origins[:, 2] if hasattr(env.scene, "terrain") and hasattr(env.scene.terrain, "env_origins") else 0.0
+    mouth_z = asset.data.site_pos_w[:, asset_cfg.site_ids[0], 2] - origin_z
     proximity = torch.exp(-((mouth_z - target_height) / std) ** 2)
     gate = phase_pose_blend(_gp_phase(env, command_name), descent_end, hold_end, rise_end)
     return gate * proximity
@@ -7682,3 +7684,948 @@ class FetchTargetCommandCfg(UniformVelocityCommandCfg):
         return FetchTargetCommand(self, env)
 
 
+
+
+# ==============================================================================
+# Stairs Climbing Task — Clearance, Landing Damping, Contact & Recovery Terms
+# ==============================================================================
+
+import torch.nn.functional as F
+from mjlab.sensor import ContactSensor
+from mjlab.utils.lab_api.math import quat_apply_inverse
+
+# Dedicated site config for feet sites on Microduck.
+# Prevents SceneEntityCfg("robot") default from selecting all 7 sites (imu, camera, tof, etc.)
+# which would trigger RuntimeError dimension mismatch against 2-primary sensors.
+_FEET_SITE_CFG = SceneEntityCfg("robot", site_names=("left_foot", "right_foot"))
+_FEET_SITE_CFG.site_ids = [1, 6]
+
+
+def stairs_foot_clearance_penalty(
+    env: ManagerBasedRlEnv,
+    target_height: float = 0.035,
+    height_sensor_name: str = "foot_height_scan",
+    command_name: str | None = "twist",
+    command_threshold: float = 0.01,
+    vel_threshold: float = 0.02,
+    asset_cfg: SceneEntityCfg = _FEET_SITE_CFG,
+) -> torch.Tensor:
+    """Penalize foot clearance shortfall during forward swing on stairs.
+
+    Unlike mjlab's feet_clearance (which penalizes lifting higher than target),
+    this is ONE-SIDED: lifting higher than target_height is completely free
+    (0 penalty). Only penalizes clearance deficits (target_height - h > 0)
+    when the foot is moving forward horizontally with velocity > vel_threshold.
+
+    Returns <= 0 (self-negating microduck penalty) -> weight with positive sign.
+    """
+    asset: Entity = env.scene[asset_cfg.name]
+    height_sensor = env.scene[height_sensor_name]
+    foot_height = torch.nan_to_num(height_sensor.data.heights, nan=0.0)
+    foot_vel_xy = asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2]
+    vel_norm = torch.nan_to_num(torch.linalg.norm(foot_vel_xy, dim=-1), nan=0.0)
+
+    # One-sided clearance deficit: positive only when clearance is insufficient
+    clearance_deficit = torch.clamp(target_height - foot_height, min=0.0)
+    moving = torch.clamp(vel_norm - vel_threshold, min=0.0)
+
+    cost = torch.sum(clearance_deficit * moving, dim=1)
+
+    if command_name is not None and hasattr(env, "command_manager"):
+        cmd = env.command_manager.get_command(command_name)
+        if cmd is not None:
+            cmd_norm = torch.linalg.norm(cmd[:, :2], dim=1)
+            cmd_active = (cmd_norm > command_threshold).float()
+            cost = cost * cmd_active
+
+    return -cost
+
+
+def stairs_foot_landing_damping_penalty(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    impact_force_thresh: float = 8.0,
+    impact_vel_thresh: float = 0.08,
+    vel_weight: float = 10.0,
+    asset_cfg: SceneEntityCfg = _FEET_SITE_CFG,
+) -> torch.Tensor:
+    """Penalize excessive impact force and downward normal velocity at foot landing.
+
+    Evaluated exclusively at touchdown (first_contact).
+    - Forces below impact_force_thresh (~1x body weight) are free.
+    - Downward normal velocity (-v_z) above impact_vel_thresh is penalized quadratically.
+
+    Protects XL330 gear trains and damps footfall bounce on rigid stair treads.
+    Returns <= 0 (self-negating microduck penalty) -> weight with positive sign.
+    """
+    contact_sensor: ContactSensor = env.scene[sensor_name]
+    first_contact = contact_sensor.compute_first_contact(dt=env.step_dt)
+
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    force_mag = torch.linalg.norm(forces, dim=-1)
+    excess_force = torch.clamp(force_mag - impact_force_thresh, min=0.0)
+
+    asset: Entity = env.scene[asset_cfg.name]
+    foot_vz = torch.nan_to_num(asset.data.site_lin_vel_w[:, asset_cfg.site_ids, 2], nan=0.0)
+    down_vel = torch.clamp(-foot_vz - impact_vel_thresh, min=0.0)
+
+    touchdown_cost = (excess_force + vel_weight * torch.square(down_vel)) * first_contact.float()
+    return -torch.sum(touchdown_cost, dim=1)
+
+
+def stairs_riser_trip_penalty(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    max_friction_ratio: float = 0.85,
+    asset_cfg: SceneEntityCfg = _FEET_SITE_CFG,
+) -> torch.Tensor:
+    """Penalize foot collision with vertical stair risers (stubbing/tripping).
+
+    On horizontal treads, contact normal is vertical: F_z dominates and |F_xy| <= mu * F_z.
+    On a vertical riser, contact normal is horizontal: F_xy dominates while F_z is near zero.
+    Penalizes horizontal shear forces in excess of max_friction_ratio * F_z.
+    Default max_friction_ratio=0.85 accommodates standard stance push-off on flat ground
+    without false-positive trip penalties.
+
+    Returns <= 0 (self-negating microduck penalty) -> weight with positive sign.
+    """
+    contact_sensor: ContactSensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    f_xy = torch.linalg.norm(forces[:, :, :2], dim=-1)
+    f_z = torch.clamp(forces[:, :, 2], min=0.0)
+
+    found = contact_sensor.data.found
+    if found.dim() == 1:
+        in_contact = (found > 0).float().unsqueeze(1)
+    else:
+        in_contact = (found > 0).float()
+
+    riser_excess = torch.clamp(f_xy - max_friction_ratio * f_z, min=0.0)
+    trip_cost = torch.sum(riser_excess * in_contact, dim=1)
+    return -trip_cost
+
+
+def stairs_sole_flat_penalty(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    asset_cfg: SceneEntityCfg = _FEET_SITE_CFG,
+    tilt_deadband_deg: float = 0.0,
+    gate_tilt_above_deg: float = 90.0,
+) -> torch.Tensor:
+    """Penalize foot sole tilt during stance on stair treads.
+
+    Projects gravity into the foot site frame. When flat on a tread, g_site_xy = 0.
+    Includes a tilt deadband (tilt_deadband_deg) allowing natural heel-strike and
+    toe-off without penalty. Gated by contact so swing feet are free to articulate,
+    and gated by trunk tilt so foot angle is not penalized during ground recovery.
+
+    Returns <= 0 (self-negating microduck penalty) -> weight with positive sign.
+    """
+    asset: Entity = env.scene[asset_cfg.name]
+    gravity_w_n = F.normalize(asset.data.gravity_vec_w, dim=-1)
+    foot_quats = asset.data.site_quat_w[:, asset_cfg.site_ids, :]
+
+    num_feet = foot_quats.shape[1]
+    per_foot = torch.zeros(env.num_envs, num_feet, device=env.device, dtype=torch.float32)
+    for i in range(num_feet):
+        proj = quat_apply_inverse(foot_quats[:, i, :], gravity_w_n)
+        per_foot[:, i] = torch.sum(torch.square(proj[:, :2]), dim=1)
+
+    deadband_val = math.sin(math.radians(tilt_deadband_deg)) ** 2
+    excess_tilt = torch.clamp(per_foot - deadband_val, min=0.0)
+
+    contact_sensor: ContactSensor = env.scene[sensor_name]
+    contact_time = contact_sensor.data.current_contact_time
+    if contact_time is not None:
+        cost_per_foot = excess_tilt * (contact_time > 0.0).float()
+    else:
+        found = contact_sensor.data.found
+        if found.dim() == 1:
+            in_contact = (found > 0).float().unsqueeze(1)
+        else:
+            in_contact = (found > 0).float()
+        cost_per_foot = excess_tilt * in_contact
+
+    total_cost = cost_per_foot.sum(dim=1)
+
+    # Gate out during fallen states / ground recovery
+    if gate_tilt_above_deg < 90.0 and hasattr(asset.data, "root_link_quat_w"):
+        root_quat = asset.data.root_link_quat_w
+        trunk_down = quat_apply_inverse(root_quat, gravity_w_n)
+        cos_tilt = -trunk_down[:, 2]
+        cos_thresh = math.cos(math.radians(gate_tilt_above_deg))
+        total_cost = total_cost * (cos_tilt > cos_thresh).float()
+
+    return -total_cost
+
+
+def stairs_relative_height_progress(
+    env: ManagerBasedRlEnv,
+    ceiling: float = 0.115,
+    asset_cfg: SceneEntityCfg = _FEET_SITE_CFG,
+) -> torch.Tensor:
+    """Potential-based relative height shaping on stairs: Delta min(z_trunk_rel, ceiling).
+
+    CRITICAL FOR STAIRS: Standard height_progress uses (z_trunk - z_origin), which
+    saturates above step 1 because step risers add elevation.
+    This function uses trunk height RELATIVE to the lowest foot site:
+        z_rel = z_trunk - min(z_left_foot, z_right_foot)
+
+    Properties:
+    - Invariant to which stair step the robot is standing or lying on.
+    - Climbing stairs leaves z_rel constant (~0.117 m), so climbing cannot farm recovery!
+    - Rising out of a crouch or prone state pays Delta z_rel > 0.
+    - Holding any pose pays exactly 0.0.
+
+    Returns Delta Phi in [-0.05, 0.05] -> weight with positive sign.
+    """
+    asset: Entity = env.scene[asset_cfg.name]
+    trunk_z = torch.nan_to_num(asset.data.root_link_pos_w[:, 2], nan=0.0)
+    foot_z = torch.nan_to_num(asset.data.site_pos_w[:, asset_cfg.site_ids, 2], nan=0.0)
+    min_foot_z = torch.min(foot_z, dim=1).values
+
+    z_rel = torch.nan_to_num(trunk_z - min_foot_z, nan=0.0)
+    pot = torch.clamp(z_rel, max=ceiling)
+
+    if not hasattr(env, "_stairs_rel_height_pot_prev"):
+        env._stairs_rel_height_pot_prev = pot.clone()
+
+    fresh = env.episode_length_buf <= 1
+    env._stairs_rel_height_pot_prev[fresh] = pot[fresh]
+
+    delta = pot - env._stairs_rel_height_pot_prev
+    env._stairs_rel_height_pot_prev = pot.clone()
+    return torch.nan_to_num(delta, nan=0.0)
+
+
+def fallen_persistence_penalty(
+    env: ManagerBasedRlEnv,
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    gate_tilt_above_deg: float = 40.0,
+    grace_period_s: float = 1.0,
+    max_penalty_scale: float = 5.0,
+) -> torch.Tensor:
+    """Progressive penalty for staying fallen too long without recovering.
+
+    Returns <= 0 (self-negating microduck penalty) -> weight with positive sign.
+    - If robot is upright: penalty is 0.0.
+    - If robot is fallen: gives grace_period_s (e.g. 1.0s) to initiate recovery,
+      then taxes progressively heavier the longer the robot remains fallen.
+    Forces the policy to actively execute self-recovery instead of passively
+    resting or giving up after being toppled.
+    """
+    asset: Entity = env.scene[asset_cfg.name]
+    quat = asset.data.root_link_quat_w
+    cos_tilt = 1.0 - 2.0 * (quat[:, 1] ** 2 + quat[:, 2] ** 2)
+    fallen = cos_tilt < math.cos(math.radians(gate_tilt_above_deg))
+
+    if not hasattr(env, "_fallen_persistence_timer"):
+        env._fallen_persistence_timer = torch.zeros(env.num_envs, device=env.device)
+
+    fresh = env.episode_length_buf <= 1
+    env._fallen_persistence_timer[fresh] = 0.0
+
+    # Accumulate time while fallen, reset when upright
+    env._fallen_persistence_timer = torch.where(
+        fallen,
+        env._fallen_persistence_timer + env.step_dt,
+        torch.zeros_like(env._fallen_persistence_timer),
+    )
+
+    excess_time = torch.clamp(env._fallen_persistence_timer - grace_period_s, min=0.0)
+    # Progressive cost: scales with excess duration capped at max_penalty_scale
+    cost = torch.clamp(excess_time, max=max_penalty_scale)
+    return -cost
+
+
+def standstill_or_sluggish_penalty(
+    env: ManagerBasedRlEnv,
+    command_name: str = "twist",
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    cmd_threshold: float = 0.05,
+    min_vel_ratio: float = 0.60,
+    base_sluggish_cost: float = 1.0,
+    deficit_multiplier: float = 5.0,
+) -> torch.Tensor:
+    """Penalize standing still or creeping sluggishly when forward motion is commanded.
+
+    Returns <= 0 (self-negating microduck penalty) -> weight with POSITIVE sign.
+
+    When commanded forward speed vx_cmd > cmd_threshold (e.g. 0.05 m/s):
+    - Target minimum forward speed is target_vx = vx_cmd * min_vel_ratio.
+    - If actual base forward speed (in base frame) is below target_vx:
+      Deficit = target_vx - actual_vx.
+      Cost = base_sluggish_cost + deficit_multiplier * Deficit.
+    - If robot meets or exceeds target_vx: cost is 0.0.
+    - When standing idle is commanded (vx_cmd <= cmd_threshold): cost is 0.0.
+
+    Forces the policy out of the 'Do Nothing' / creeping local minimum.
+    """
+    cmd = env.command_manager.get_command(command_name)
+    cmd_vx = torch.nan_to_num(cmd[:, 0], nan=0.0)
+
+    asset: Entity = env.scene[asset_cfg.name]
+    actual_vx = torch.nan_to_num(asset.data.root_link_lin_vel_b[:, 0], nan=0.0)
+
+    active = cmd_vx > cmd_threshold
+    target_vx = cmd_vx * min_vel_ratio
+    deficit = torch.clamp(target_vx - actual_vx, min=0.0)
+
+    cost = torch.where(
+        active & (deficit > 0.0),
+        base_sluggish_cost + deficit_multiplier * deficit,
+        torch.zeros_like(cmd_vx),
+    )
+    return -torch.nan_to_num(cost, nan=0.0)
+
+
+def feet_slide_penalty(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    asset_cfg: SceneEntityCfg = _FEET_SITE_CFG,
+    contact_force_thresh: float = 1.0,
+    slide_vel_thresh: float = 0.03,
+) -> torch.Tensor:
+    """Penalize horizontal foot sliding / skating across the ground while in stance contact.
+
+    Returns <= 0 (self-negating microduck penalty) -> weight with POSITIVE sign.
+
+    When a foot is in contact with the ground (Fn > contact_force_thresh),
+    its horizontal velocity (vx^2 + vy^2) must be near zero (< slide_vel_thresh).
+    Dragging or shuffling feet along the ground ('trượt patin') is heavily penalized.
+    Forces the robot to cleanly lift the swing foot completely into the air to move.
+    """
+    contact_sensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    fn = torch.linalg.norm(forces, dim=-1)
+    in_contact = fn > contact_force_thresh
+
+    asset: Entity = env.scene[asset_cfg.name]
+    foot_vel_xy = torch.nan_to_num(asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2], nan=0.0)
+    slide_speed = torch.nan_to_num(torch.linalg.norm(foot_vel_xy, dim=-1), nan=0.0)
+
+    excess_slide = torch.clamp(slide_speed - slide_vel_thresh, min=0.0)
+    slide_cost = torch.sum(in_contact.float() * torch.square(excess_slide), dim=-1)
+    return -torch.nan_to_num(slide_cost, nan=0.0)
+
+
+def stair_elevation_gain_progress(
+    env: ManagerBasedRlEnv,
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    max_elevation: float = 0.50,
+) -> torch.Tensor:
+    """Potential-based reward for climbing up stairs and gaining absolute height.
+
+    Returns Delta Phi in [-0.05, 0.05] -> weight with POSITIVE sign.
+    Every time the robot climbs up to a higher stair step (trunk z increases from
+    initial 0.12m up toward the summit platform), it receives positive progress reward.
+    Falling down or staying at the bottom pays zero / negative.
+    Actively drives the robot to CLIMB UP the staircase.
+    """
+    asset: Entity = env.scene[asset_cfg.name]
+    trunk_z = torch.nan_to_num(asset.data.root_link_pos_w[:, 2], nan=0.0)
+    pot = torch.clamp(trunk_z, min=0.0, max=max_elevation)
+
+    if not hasattr(env, "_stair_elevation_pot_prev"):
+        env._stair_elevation_pot_prev = pot.clone()
+
+    fresh = env.episode_length_buf <= 1
+    env._stair_elevation_pot_prev[fresh] = pot[fresh]
+
+    delta = pot - env._stair_elevation_pot_prev
+    env._stair_elevation_pot_prev = pot.clone()
+    return torch.nan_to_num(delta, nan=0.0)
+
+
+def single_leg_stance_balance_reward(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    contact_force_thresh: float | None = None,
+    stance_force_thresh: float = 4.0,
+    swing_force_thresh: float = 1.5,
+    min_trunk_z: float = 0.095,
+    max_tilt_deg: float = 22.0,
+    command_name: str = "twist",
+    cmd_threshold: float = 0.03,
+) -> torch.Tensor:
+    """Reward maintaining stable single-leg balance when stepping up.
+
+    Returns [0, 1] -> weight with POSITIVE sign.
+    STRICT ANTI-FARMING GATES:
+    - Must be upright: cos_tilt > cos(max_tilt_deg) and trunk_z > min_trunk_z.
+    - True single stance: stance foot must bear weight (> stance_force_thresh),
+      swing foot must be airborne (< swing_force_thresh).
+    - If fallen, sitting, or lying down -> reward is strictly 0.0.
+    """
+    if contact_force_thresh is not None:
+        stance_force_thresh = max(contact_force_thresh, 3.5)
+
+    asset: Entity = env.scene[asset_cfg.name]
+    trunk_z = torch.nan_to_num(asset.data.root_link_pos_w[:, 2] - env.scene.terrain.env_origins[:, 2], nan=0.0)
+    quat = asset.data.root_link_quat_w
+    cos_tilt = torch.clamp(1.0 - 2.0 * (quat[:, 1] ** 2 + quat[:, 2] ** 2), min=0.0, max=1.0)
+    cos_thresh = math.cos(math.radians(max_tilt_deg))
+    upright = (cos_tilt > cos_thresh) & (trunk_z > min_trunk_z)
+
+    contact_sensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    fn = torch.linalg.norm(forces, dim=-1)  # (num_envs, 2) [left, right]
+    left_stance = (fn[:, 0] > stance_force_thresh) & (fn[:, 1] < swing_force_thresh)
+    right_stance = (fn[:, 1] > stance_force_thresh) & (fn[:, 0] < swing_force_thresh)
+    valid_single_stance = (left_stance | right_stance) & upright
+
+    ang_vel_rp = torch.linalg.norm(asset.data.root_link_ang_vel_b[:, :2], dim=-1)
+    stability = cos_tilt * torch.exp(-ang_vel_rp / 1.5)
+
+    cmd = env.command_manager.get_command(command_name)
+    cmd_active = (torch.nan_to_num(cmd[:, 0], nan=0.0) > cmd_threshold).float()
+
+    reward = valid_single_stance.float() * stability * cmd_active
+    return torch.nan_to_num(reward, nan=0.0)
+
+
+def swing_knee_flexion_reward(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    contact_force_thresh: float | None = None,
+    stance_force_thresh: float = 4.0,
+    swing_force_thresh: float = 1.5,
+    min_trunk_z: float = 0.095,
+    max_tilt_deg: float = 22.0,
+    target_knee_flex: float = 0.55,
+    knee_std: float = 0.25,
+    command_name: str = "twist",
+    cmd_threshold: float = 0.03,
+) -> torch.Tensor:
+    """Reward digitigrade knee flexion and forward hip swing on the airborne leg.
+
+    Returns [0, 1] -> weight with POSITIVE sign.
+    Microduck has digitigrade/bird-like leg anatomy: knee flexes backward.
+    STRICT ANTI-FARMING GATES:
+    - Robot MUST be fully upright (tilt < max_tilt_deg and trunk_z > min_trunk_z).
+    - Opposite stance foot MUST be firmly planted and bearing weight (> stance_force_thresh).
+    - If robot is fallen, sitting on its butt, or lying down -> reward is strictly 0.0!
+    """
+    if contact_force_thresh is not None:
+        stance_force_thresh = max(contact_force_thresh, 3.5)
+
+    asset: Entity = env.scene[asset_cfg.name]
+    trunk_z = torch.nan_to_num(asset.data.root_link_pos_w[:, 2] - env.scene.terrain.env_origins[:, 2], nan=0.0)
+    quat = asset.data.root_link_quat_w
+    cos_tilt = torch.clamp(1.0 - 2.0 * (quat[:, 1] ** 2 + quat[:, 2] ** 2), min=0.0, max=1.0)
+    cos_thresh = math.cos(math.radians(max_tilt_deg))
+    upright = (cos_tilt > cos_thresh) & (trunk_z > min_trunk_z)
+
+    contact_sensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    fn = torch.linalg.norm(forces, dim=-1)  # (num_envs, 2) [left, right]
+
+    # Exactly one leg is swing while the OTHER leg is firmly planted in stance
+    left_swing = (fn[:, 0] < swing_force_thresh) & (fn[:, 1] > stance_force_thresh) & upright
+    right_swing = (fn[:, 1] < swing_force_thresh) & (fn[:, 0] > stance_force_thresh) & upright
+
+    qpos = _servo_joint_pos(env, asset)
+    # Left knee = idx 3, Right knee = idx 12
+    left_flex = torch.exp(-torch.square((qpos[:, 3] - target_knee_flex) / knee_std))
+    right_flex = torch.exp(-torch.square((qpos[:, 12] - target_knee_flex) / knee_std))
+
+    cmd = env.command_manager.get_command(command_name)
+    cmd_active = (torch.nan_to_num(cmd[:, 0], nan=0.0) > cmd_threshold).float()
+
+    reward = (left_flex * left_swing.float() + right_flex * right_swing.float()) * cmd_active
+    return torch.nan_to_num(torch.clamp(reward, 0.0, 1.0), nan=0.0)
+
+
+def stance_forward_pitch_lean_reward(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    contact_force_thresh: float | None = None,
+    stance_force_thresh: float = 4.0,
+    swing_force_thresh: float = 1.5,
+    min_trunk_z: float = 0.095,
+    max_tilt_deg: float = 22.0,
+    target_forward_lean: float = 0.12,
+    lean_std: float = 0.08,
+    command_name: str = "twist",
+    cmd_threshold: float = 0.03,
+) -> torch.Tensor:
+    """Reward stance leg forward pitch lean to shift CoM over the upper stair tread.
+
+    Returns [0, 1] -> weight with POSITIVE sign.
+    STRICT ANTI-FARMING GATES:
+    - Robot must be upright and supported on one stance foot bearing body weight.
+    - If fallen, sitting, or lying down -> reward is strictly 0.0!
+    """
+    if contact_force_thresh is not None:
+        stance_force_thresh = max(contact_force_thresh, 3.5)
+
+    asset: Entity = env.scene[asset_cfg.name]
+    trunk_z = torch.nan_to_num(asset.data.root_link_pos_w[:, 2] - env.scene.terrain.env_origins[:, 2], nan=0.0)
+    quat = asset.data.root_link_quat_w
+    cos_tilt = torch.clamp(1.0 - 2.0 * (quat[:, 1] ** 2 + quat[:, 2] ** 2), min=0.0, max=1.0)
+    cos_thresh = math.cos(math.radians(max_tilt_deg))
+    upright = (cos_tilt > cos_thresh) & (trunk_z > min_trunk_z)
+
+    contact_sensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    fn = torch.linalg.norm(forces, dim=-1)
+    left_stance = (fn[:, 0] > stance_force_thresh) & (fn[:, 1] < swing_force_thresh)
+    right_stance = (fn[:, 1] > stance_force_thresh) & (fn[:, 0] < swing_force_thresh)
+    valid_single_stance = (left_stance | right_stance) & upright
+
+    fwd_lean = asset.data.projected_gravity_b[:, 0]  # positive = lean forward
+    lean_match = torch.exp(-torch.square((fwd_lean - target_forward_lean) / lean_std))
+
+    cmd = env.command_manager.get_command(command_name)
+    cmd_active = (torch.nan_to_num(cmd[:, 0], nan=0.0) > cmd_threshold).float()
+
+    reward = valid_single_stance.float() * lean_match * cmd_active
+    return torch.nan_to_num(reward, nan=0.0)
+
+
+def double_support_stagnation_penalty(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    contact_force_thresh: float = 2.0,
+    command_name: str = "twist",
+    cmd_threshold: float = 0.03,
+    max_double_time_s: float = 0.40,
+) -> torch.Tensor:
+    """Penalize remaining frozen in double-support stance against a stair riser.
+
+    Returns <= 0 (self-negating microduck penalty) -> weight with POSITIVE sign.
+    If the robot keeps both feet firmly planted on the ground for more than max_double_time_s
+    while forward walking is commanded, this penalty accumulates.
+    Forces the robot to initiate single-leg swing and step up.
+    """
+    contact_sensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    fn = torch.linalg.norm(forces, dim=-1)
+    both_in_contact = (fn > contact_force_thresh).sum(dim=-1) == 2
+
+    cmd = env.command_manager.get_command(command_name)
+    cmd_active = (torch.nan_to_num(cmd[:, 0], nan=0.0) > cmd_threshold)
+
+    if not hasattr(env, "_stair_double_support_timer"):
+        env._stair_double_support_timer = torch.zeros(env.num_envs, device=env.device)
+
+    fresh = env.episode_length_buf <= 1
+    env._stair_double_support_timer[fresh] = 0.0
+
+    stagnating = both_in_contact & cmd_active
+    env._stair_double_support_timer = torch.where(
+        stagnating,
+        env._stair_double_support_timer + env.step_dt,
+        torch.zeros_like(env._stair_double_support_timer),
+    )
+
+    excess = torch.clamp(env._stair_double_support_timer - max_double_time_s, min=0.0)
+    cost = torch.clamp(excess * 5.0, max=5.0)
+    return -cost
+
+
+def stance_push_off_propulsion_reward(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    contact_force_thresh: float = 2.0,
+    min_fwd_vel: float = 0.03,
+) -> torch.Tensor:
+    """Reward stance leg forward extension and propulsion when stepping up.
+
+    Returns [0, 1] -> weight with POSITIVE sign.
+    When a foot is in stance, reward forward body velocity (vx_b > min_fwd_vel)
+    combined with positive vertical ascent velocity (vz_w > 0).
+    """
+    contact_sensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    fn = torch.linalg.norm(forces, dim=-1)
+    in_contact = (fn > contact_force_thresh).any(dim=-1)
+
+    asset: Entity = env.scene[asset_cfg.name]
+    vx = torch.clamp(asset.data.root_link_lin_vel_b[:, 0] - min_fwd_vel, min=0.0)
+    vz = torch.clamp(asset.data.root_link_lin_vel_w[:, 2], min=0.0)
+
+    propulsion = torch.clamp(vx * 4.0 + vz * 6.0, 0.0, 1.0)
+    reward = in_contact.float() * propulsion
+    return torch.nan_to_num(reward, nan=0.0)
+
+
+def swing_foot_sole_leveling_reward(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    asset_cfg: SceneEntityCfg = _FEET_SITE_CFG,
+    stance_force_thresh: float = 3.5,
+    swing_force_thresh: float = 1.5,
+    max_tilt_deg: float = 22.0,
+    min_trunk_z: float = 0.095,
+    tilt_std_deg: float = 6.0,
+    command_name: str = "twist",
+    cmd_threshold: float = 0.03,
+) -> torch.Tensor:
+    """Reward maintaining horizontal sole pitch and roll (0 deg) on the airborne swing foot.
+
+    Uses the actual 3D spatial orientation of the foot site in world frame
+    (asset.data.site_quat_w) relative to gravity.
+    Prevents toe-stubbing and heel-kickback on stair risers and rough terrain regardless
+    of knee flexion angle.
+    Returns [0, 1] -> weight with POSITIVE sign.
+    """
+    import torch.nn.functional as F
+
+    asset: Entity = env.scene[asset_cfg.name]
+    trunk_z = torch.nan_to_num(asset.data.root_link_pos_w[:, 2] - env.scene.terrain.env_origins[:, 2], nan=0.0)
+    quat = asset.data.root_link_quat_w
+    cos_tilt = torch.clamp(1.0 - 2.0 * (quat[:, 1] ** 2 + quat[:, 2] ** 2), min=0.0, max=1.0)
+    cos_thresh = math.cos(math.radians(max_tilt_deg))
+    upright = (cos_tilt > cos_thresh) & (trunk_z > min_trunk_z)
+
+    contact_sensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    fn = torch.linalg.norm(forces, dim=-1)  # (num_envs, 2) [left, right]
+
+    left_swing = (fn[:, 0] < swing_force_thresh) & (fn[:, 1] > stance_force_thresh) & upright
+    right_swing = (fn[:, 1] < swing_force_thresh) & (fn[:, 0] > stance_force_thresh) & upright
+
+    # Project unit gravity into each foot site's frame
+    gravity_w_n = F.normalize(asset.data.gravity_vec_w, dim=-1)
+    foot_quats = asset.data.site_quat_w[:, asset_cfg.site_ids, :]  # (B, 2, 4)
+
+    # When sole is horizontal, gravity projects to [0, 0, -1] -> xy tilt = 0
+    proj_left = quat_apply_inverse(foot_quats[:, 0, :], gravity_w_n)
+    proj_right = quat_apply_inverse(foot_quats[:, 1, :], gravity_w_n)
+
+    tilt_sq_l = torch.sum(torch.square(proj_left[:, :2]), dim=1)
+    tilt_sq_r = torch.sum(torch.square(proj_right[:, :2]), dim=1)
+
+    std_sin_sq = (math.sin(math.radians(tilt_std_deg))) ** 2
+    left_match = torch.exp(-tilt_sq_l / (std_sin_sq + 1e-6))
+    right_match = torch.exp(-tilt_sq_r / (std_sin_sq + 1e-6))
+
+    cmd = env.command_manager.get_command(command_name)
+    cmd_active = (torch.nan_to_num(cmd[:, 0], nan=0.0) > cmd_threshold).float()
+
+    reward = (left_match * left_swing.float() + right_match * right_swing.float()) * cmd_active
+    return torch.nan_to_num(torch.clamp(reward, 0.0, 1.0), nan=0.0)
+
+
+def servo_torque_headroom_penalty(
+    env: ManagerBasedRlEnv,
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    safe_torque_limit: float = 0.72,
+) -> torch.Tensor:
+    """Penalize servo torque loads exceeding 75% of the 0.96 Nm Dynamixel XL330 stall limit.
+
+    Returns <= 0 (self-negating microduck penalty) -> weight with POSITIVE sign.
+    Protects physical servos against thermal shutdown and mechanical gear stripping.
+    """
+    asset: Entity = env.scene[asset_cfg.name]
+    torques = torch.nan_to_num(asset.data.actuator_force, nan=0.0)
+    excess = torch.clamp(torch.abs(torques) - safe_torque_limit, min=0.0)
+    cost = torch.square(excess).sum(dim=-1)
+    return -torch.clamp(cost, max=10.0)
+
+
+def stairs_alternating_gait_reward(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    contact_force_thresh: float = 2.0,
+    command_name: str = "twist",
+    cmd_threshold: float = 0.03,
+) -> torch.Tensor:
+    """Reward alternating bipedal support phases (single-foot swing vs single-foot stance).
+
+    Returns [0, 1] -> weight with POSITIVE sign.
+    Penalizes bunny-hopping (both feet airborne) and stalling (both feet grounded).
+    """
+    contact_sensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    fn = torch.linalg.norm(forces, dim=-1)
+
+    # Exactly one foot in stance and one foot in swing
+    left_only = (fn[:, 0] > contact_force_thresh) & (fn[:, 1] <= contact_force_thresh)
+    right_only = (fn[:, 1] > contact_force_thresh) & (fn[:, 0] <= contact_force_thresh)
+    alternating = (left_only | right_only).float()
+
+    cmd = env.command_manager.get_command(command_name)
+    cmd_active = (torch.nan_to_num(cmd[:, 0], nan=0.0) > cmd_threshold).float()
+
+    return alternating * cmd_active
+
+
+# =============================================================================
+# High-Step Walking & Single-Leg Balance MDP Functions
+# =============================================================================
+
+def swing_foot_vertical_velocity_penalty(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    asset_cfg: SceneEntityCfg = _FEET_SITE_CFG,
+    max_safe_vz: float = 0.20,
+    swing_force_thresh: float = 1.5,
+) -> torch.Tensor:
+    """Penalize excessive upward velocity of the swinging foot.
+
+    Returns <= 0 (self-negating microduck penalty) -> weight with POSITIVE sign.
+    Physics: For an 800g biped, rapidly jerking a ~180g leg upward (> 0.20 m/s)
+    imparts massive inertial reaction torque on the pelvis, tipping the narrow stance foot.
+    Enforces gentle, slow, and smooth leg elevation.
+    """
+    asset: Entity = env.scene[asset_cfg.name]
+    contact_sensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    fn = torch.linalg.norm(forces, dim=-1)  # (num_envs, 2)
+
+    # Foot vertical velocities in world frame
+    site_lin_vel_z = asset.data.site_lin_vel_w[:, asset_cfg.site_ids, 2]  # vz (num_envs, 2)
+    # Only penalize upward jerk while airborne in swing (fn < swing_force_thresh)
+    is_swing = fn < swing_force_thresh
+    upward_excess = torch.clamp(site_lin_vel_z - max_safe_vz, min=0.0)
+    cost = torch.square(upward_excess) * is_swing.float()
+    return -torch.clamp(cost.sum(dim=-1), max=5.0)
+
+
+def single_leg_continuous_balance_reward(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    stance_force_thresh: float = 3.5,
+    swing_force_thresh: float = 1.5,
+    max_tilt_deg: float = 20.0,
+    min_trunk_z: float = 0.10,
+    roll_pitch_rate_std: float = 0.35,
+    command_name: str = "twist",
+    cmd_threshold: float = 0.03,
+) -> torch.Tensor:
+    """Reward continuous dynamic single-leg balance throughout the leg lifting phase.
+
+    Returns [0, 1] -> weight with POSITIVE sign.
+    While one foot is airborne and the stance foot is bearing weight:
+    - Robot must remain upright (tilt < 20 deg, trunk_z > 0.10m).
+    - Minimizes roll/pitch angular velocity (omega_roll^2 + omega_pitch^2).
+    - Prevents toppling, wobbling, or edge-tipping on the stance foot.
+    """
+    asset: Entity = env.scene[asset_cfg.name]
+    trunk_z = torch.nan_to_num(asset.data.root_link_pos_w[:, 2] - env.scene.terrain.env_origins[:, 2], nan=0.0)
+    quat = asset.data.root_link_quat_w
+    cos_tilt = torch.clamp(1.0 - 2.0 * (quat[:, 1] ** 2 + quat[:, 2] ** 2), min=0.0, max=1.0)
+    cos_thresh = math.cos(math.radians(max_tilt_deg))
+    upright = (cos_tilt > cos_thresh) & (trunk_z > min_trunk_z)
+
+    contact_sensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    fn = torch.linalg.norm(forces, dim=-1)  # (num_envs, 2)
+    left_single = (fn[:, 0] > stance_force_thresh) & (fn[:, 1] < swing_force_thresh)
+    right_single = (fn[:, 1] > stance_force_thresh) & (fn[:, 0] < swing_force_thresh)
+    is_single_stance = (left_single | right_single) & upright
+
+    # Body angular velocity roll & pitch damping in body frame
+    ang_vel_rp = torch.linalg.norm(asset.data.root_link_ang_vel_b[:, :2], dim=-1)
+    rate_factor = torch.exp(-torch.square(ang_vel_rp / roll_pitch_rate_std))
+
+    cmd = env.command_manager.get_command(command_name)
+    cmd_active = (torch.nan_to_num(cmd[:, 0], nan=0.0) > cmd_threshold).float()
+
+    reward = is_single_stance.float() * rate_factor * cos_tilt * cmd_active
+    return torch.nan_to_num(torch.clamp(reward, 0.0, 1.0), nan=0.0)
+
+
+def smooth_high_step_clearance_reward(
+    env: ManagerBasedRlEnv,
+    height_sensor_name: str = "foot_height_scan",
+    sensor_name: str = "feet_ground_contact",
+    target_clearance: float = 0.040,
+    clearance_std: float = 0.015,
+    swing_force_thresh: float = 1.5,
+    command_name: str = "twist",
+    cmd_threshold: float = 0.03,
+) -> torch.Tensor:
+    """Reward smooth high foot elevation on the airborne swing leg.
+
+    Returns [0, 1] -> weight with POSITIVE sign.
+    Uses a smooth Gaussian bell curve around target_clearance (e.g. 3.5 - 4.5 cm),
+    providing a continuous, smooth gradient without violent jerk step-function artifacts.
+    """
+    height_sensor = env.scene[height_sensor_name]
+    foot_height = torch.nan_to_num(height_sensor.data.heights, nan=0.0)  # (num_envs, 2)
+
+    contact_sensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    fn = torch.linalg.norm(forces, dim=-1)
+    is_swing = fn < swing_force_thresh
+
+    # Gaussian tracking of desired clearance
+    clearance_score = torch.exp(-torch.square((foot_height - target_clearance) / clearance_std))
+    swing_score = (clearance_score * is_swing.float()).max(dim=-1).values
+
+    cmd = env.command_manager.get_command(command_name)
+    cmd_active = (torch.nan_to_num(cmd[:, 0], nan=0.0) > cmd_threshold).float()
+
+    reward = swing_score * cmd_active
+    return torch.nan_to_num(torch.clamp(reward, 0.0, 1.0), nan=0.0)
+
+
+def coronal_pelvic_sway_reward(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    stance_force_thresh: float = 3.5,
+    swing_force_thresh: float = 1.5,
+    target_sway_deg: float = 8.5,
+    sway_std_deg: float = 4.0,
+    min_trunk_z: float = 0.095,
+    max_tilt_deg: float = 25.0,
+    command_name: str = "twist",
+    cmd_threshold: float = 0.03,
+) -> torch.Tensor:
+    """Reward coronal plane lateral pelvic sway (hip roll) over the stance foot.
+
+    Bipedal balance without ankle roll joints requires swaying the CoM directly
+    over the single support foot (Kajita et al., 2001 LIPM; Siekmann et al., RSS 2021).
+    - Left stance: left_hip_roll tilts toward -target_sway (~ -8.5 deg, -0.15 rad).
+    - Right stance: right_hip_roll tilts toward +target_sway (~ +8.5 deg, +0.15 rad).
+    Returns [0, 1] -> weight with POSITIVE sign.
+    """
+    asset: Entity = env.scene[asset_cfg.name]
+    trunk_z = torch.nan_to_num(asset.data.root_link_pos_w[:, 2] - env.scene.terrain.env_origins[:, 2], nan=0.0)
+    quat = asset.data.root_link_quat_w
+    cos_tilt = torch.clamp(1.0 - 2.0 * (quat[:, 1] ** 2 + quat[:, 2] ** 2), min=0.0, max=1.0)
+    cos_thresh = math.cos(math.radians(max_tilt_deg))
+    upright = (cos_tilt > cos_thresh) & (trunk_z > min_trunk_z)
+
+    contact_sensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    fn = torch.linalg.norm(forces, dim=-1)
+
+    left_single = (fn[:, 0] > stance_force_thresh) & (fn[:, 1] < swing_force_thresh) & upright
+    right_single = (fn[:, 1] > stance_force_thresh) & (fn[:, 0] < swing_force_thresh) & upright
+
+    qpos = _servo_joint_pos(env, asset)
+    left_roll = qpos[:, 1]    # joint index 1: left_hip_roll
+    right_roll = qpos[:, 10]  # joint index 10: right_hip_roll
+
+    target_rad = math.radians(target_sway_deg)
+    std_rad = math.radians(sway_std_deg)
+
+    # Left stance: left_roll sways negative (-target_rad)
+    left_sway_score = torch.exp(-torch.square((left_roll - (-target_rad)) / std_rad))
+    # Right stance: right_roll sways positive (+target_rad)
+    right_sway_score = torch.exp(-torch.square((right_roll - target_rad) / std_rad))
+
+    cmd = env.command_manager.get_command(command_name)
+    cmd_active = (torch.nan_to_num(cmd[:, 0], nan=0.0) > cmd_threshold).float()
+
+    reward = (left_sway_score * left_single.float() + right_sway_score * right_single.float()) * cmd_active
+    return torch.nan_to_num(torch.clamp(reward, 0.0, 1.0), nan=0.0)
+
+
+def stance_ankle_roll_penalty(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    stance_force_thresh: float = 3.5,
+    max_roll_dev_deg: float = 16.0,
+) -> torch.Tensor:
+    """Penalize stance ankle/hip roll joint exceeding maximum safe limit.
+
+    Returns <= 0 (self-negating microduck penalty) -> weight with POSITIVE sign.
+    Allows natural coronal sway (8 - 12 deg) for 3D LIPM balance, but catches extreme
+    hyperextension (> 16 deg) that would cause edge-tipping.
+    """
+    asset: Entity = env.scene[asset_cfg.name]
+    contact_sensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    fn = torch.linalg.norm(forces, dim=-1)
+
+    qpos = _servo_joint_pos(env, asset)
+    left_roll = qpos[:, 1]
+    right_roll = qpos[:, 10]
+
+    thresh = math.radians(max_roll_dev_deg)
+    left_excess = torch.clamp(left_roll.abs() - thresh, min=0.0) * (fn[:, 0] > stance_force_thresh).float()
+    right_excess = torch.clamp(right_roll.abs() - thresh, min=0.0) * (fn[:, 1] > stance_force_thresh).float()
+
+    cost = torch.square(left_excess) + torch.square(right_excess)
+    return -torch.clamp(cost, max=5.0)
+
+
+
+
+
+# ── Scientific Overhaul: Endogenous Heading Alignment & Compliance ──────────
+
+def track_heading_potential(
+    env: ManagerBasedRlEnv,
+    std: float = 0.25,
+    command_name: str = "twist",
+) -> torch.Tensor:
+    """Endogenous Heading-Lock Reward within POMDP (Rudin et al., Science Robotics 2022).
+
+    Measures alignment between current base yaw and target heading from command.
+    """
+    asset = env.scene["robot"]
+    quat = asset.data.root_link_quat_w
+    w, x, y, z = quat[:, 0], quat[:, 1], quat[:, 2], quat[:, 3]
+    current_yaw = torch.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+
+    cmd = env.command_manager.get_command(command_name)
+    # Target yaw error passed in command slot or relative heading
+    if hasattr(env.command_manager, "heading_target"):
+        target_yaw = env.command_manager.heading_target
+        err = torch.atan2(torch.sin(target_yaw - current_yaw), torch.cos(target_yaw - current_yaw))
+    else:
+        err = cmd[:, 2]  # twist slot carries heading error in closed-loop mode
+
+    return torch.exp(-torch.square(err / std))
+
+
+def terrain_impact_compliance_penalty(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "contact_forces",
+    force_threshold: float = 8.0,
+) -> torch.Tensor:
+    """Penalize excessive impact forces to induce compliant bipedal stepping."""
+    contact_sensor = env.scene.sensors[sensor_name]
+    net_forces = contact_sensor.data.net_forces_w
+    force_mags = torch.norm(net_forces, dim=-1)
+    max_force = torch.max(force_mags, dim=-1).values
+    violation = torch.clamp(max_force - force_threshold, min=0.0)
+    return -torch.square(violation)
+
+
+def torso_forward_pitch_reward(
+    env: ManagerBasedRlEnv,
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    target_forward_lean: float = 0.10,
+    lean_std: float = 0.06,
+    min_trunk_z: float = 0.095,
+    max_tilt_deg: float = 25.0,
+    command_name: str = "twist",
+    cmd_threshold: float = 0.03,
+) -> torch.Tensor:
+    """Reward torso forward pitch lean (anterior inclination) during active locomotion.
+
+    Encourages anticipatory postural adjustment (APA) and continuous anterior pitch
+    inclination (Brenière & Do, 1991; Siekmann et al., RSS 2021) to prevent backward
+    tipping during gait initiation and stair riser traversal.
+    Returns [0, 1] -> weight with POSITIVE sign.
+    """
+    asset: Entity = env.scene[asset_cfg.name]
+    trunk_z = torch.nan_to_num(asset.data.root_link_pos_w[:, 2] - env.scene.terrain.env_origins[:, 2], nan=0.0)
+    quat = asset.data.root_link_quat_w
+    cos_tilt = torch.clamp(1.0 - 2.0 * (quat[:, 1] ** 2 + quat[:, 2] ** 2), min=0.0, max=1.0)
+    cos_thresh = math.cos(math.radians(max_tilt_deg))
+    upright = (cos_tilt > cos_thresh) & (trunk_z > min_trunk_z)
+
+    fwd_lean = asset.data.projected_gravity_b[:, 0]  # positive = lean forward
+    lean_match = torch.exp(-torch.square((fwd_lean - target_forward_lean) / lean_std))
+
+    cmd = env.command_manager.get_command(command_name)
+    cmd_active = (torch.nan_to_num(cmd[:, 0], nan=0.0) > cmd_threshold).float()
+
+    reward = upright.float() * lean_match * cmd_active
+    return torch.nan_to_num(reward, nan=0.0)

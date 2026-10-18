@@ -225,27 +225,15 @@ def run_export(task_id: str, cfg: ExportConfig) -> ExportResult:
         )
 
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
+    runner_cls = load_runner_cls(task_id) or OnPolicyRunner
+    runner = runner_cls(env, asdict(agent_cfg), device=device)
     if DUMMY_MODE:
-        action_shape: tuple[int, ...] = env.unwrapped.action_space.shape  # type: ignore
         if cfg.agent == "zero":
-
-            class PolicyZero:
-                def __call__(self, obs) -> torch.Tensor:
-                    del obs
-                    return torch.zeros(action_shape, device=env.unwrapped.device)
-
-            policy = PolicyZero()
-        else:
-
-            class PolicyRandom:
-                def __call__(self, obs) -> torch.Tensor:
-                    del obs
-                    return 2 * torch.rand(action_shape, device=env.unwrapped.device) - 1
-
-            policy = PolicyRandom()
+            policy_mod = runner.alg.get_policy()
+            if hasattr(policy_mod, "mlp"):
+                policy_mod.mlp[-1].weight.data.zero_()
+                policy_mod.mlp[-1].bias.data.zero_()
     else:
-        runner_cls = load_runner_cls(task_id) or OnPolicyRunner
-        runner = runner_cls(env, asdict(agent_cfg), device=device)
         runner.load(str(resume_path), map_location=device)
         policy = runner.get_inference_policy(device=device)
 

@@ -127,8 +127,8 @@ from mjlab_microduck.tasks.symmetry import PpoWithSymmetryCfg, SYMMETRY_CFG
 MICRODUCK_ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
     size=(8.0, 8.0),
     border_width=20.0,
-    num_rows=10,
-    num_cols=20,
+    num_rows=5,
+    num_cols=5,
     sub_terrains={
         "flat": terrain_gen.BoxFlatTerrainCfg(proportion=0.25),
         "pyramid_stairs": terrain_gen.BoxPyramidStairsTerrainCfg(
@@ -732,8 +732,30 @@ def make_microduck_velocity_env_cfg(
     # While actively commanded to turn, this term automatically unlocks.
     cfg.rewards["heading_hold"] = RewardTermCfg(
         func=microduck_mdp.heading_hold_reward,
-        weight=0.5,
-        params={"command_name": "twist", "std": 0.35},
+        weight=2.0,
+        params={"command_name": "twist", "std": 0.25},
+    )
+
+    # Endogenous heading tracking potential within POMDP (Rudin et al., Science Robotics 2022)
+    cfg.rewards["track_heading"] = RewardTermCfg(
+        func=microduck_mdp.track_heading_potential,
+        weight=2.0,
+        params={"command_name": "twist", "std": 0.25},
+    )
+
+    # Coronal pelvic sway: active lateral weight shift over stance foot for 3D LIPM balance
+    cfg.rewards["coronal_pelvic_sway"] = RewardTermCfg(
+        func=microduck_mdp.coronal_pelvic_sway_reward,
+        weight=2.0,
+        params={
+            "sensor_name": "feet_ground_contact",
+            "stance_force_thresh": 3.5,
+            "swing_force_thresh": 1.5,
+            "target_sway_deg": 8.5,
+            "sway_std_deg": 4.0,
+            "command_name": "twist",
+            "cmd_threshold": 0.02,
+        },
     )
 
     # Head droop fix (2026-08-20). The head walks pitched ~15° down (measured:
@@ -760,7 +782,7 @@ def make_microduck_velocity_env_cfg(
         cfg.scene.terrain.terrain_generator = None
     else:
         cfg.scene.terrain.terrain_type = "generator"
-        cfg.scene.terrain.terrain_generator = MICRODUCK_ROUGH_TERRAINS_CFG
+        cfg.scene.terrain.terrain_generator = deepcopy(MICRODUCK_ROUGH_TERRAINS_CFG)
 
         # Soften terrain box contacts: adjacent boxes at different heights create
         # hard edges that destabilise the contact solver and produce NaN forces.

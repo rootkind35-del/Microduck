@@ -323,8 +323,8 @@ TOPPLE_PUSH_INTERVAL_S = (4.0, 8.0)
 TOPPLE_PUSH_STAGES = [
     {"step": 0,                                          "velocity_range": {"x": (-0.3, 0.3), "y": (-0.3, 0.3)}},
     {"step": FELL_OVER_DISABLE_ITER * NUM_STEPS_PER_ENV, "velocity_range": {"x": (-0.6, 0.6), "y": (-0.6, 0.6)}},
-    {"step": 400 * NUM_STEPS_PER_ENV,                    "velocity_range": {"x": (-0.9, 0.9), "y": (-0.9, 0.9)}},
-    {"step": 800 * NUM_STEPS_PER_ENV,                    "velocity_range": {"x": (-1.2, 1.2), "y": (-1.2, 1.2)}},
+    {"step": max(400, FELL_OVER_DISABLE_ITER + 200) * NUM_STEPS_PER_ENV, "velocity_range": {"x": (-0.9, 0.9), "y": (-0.9, 0.9)}},
+    {"step": max(800, FELL_OVER_DISABLE_ITER + 500) * NUM_STEPS_PER_ENV, "velocity_range": {"x": (-1.2, 1.2), "y": (-1.2, 1.2)}},
 ]
 
 # Failed-recovery backstop: continuously fallen this long → terminate/reset.
@@ -625,7 +625,7 @@ def make_microduck_velstand_env_cfg(play: bool = False, rough: bool = False) -> 
         func=microduck_mdp.fallen_too_long,
         time_out=False,
         params={
-            "gate_z_below": TERM_GATE_Z,
+            "gate_z_below": 0.0 if rough else TERM_GATE_Z,
             "gate_tilt_above_deg": TERM_GATE_TILT_DEG,
             "max_duration_s": FALLEN_TIMEOUT_S,
         },

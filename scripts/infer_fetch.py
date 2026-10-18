@@ -404,10 +404,10 @@ class AutonomousFetchEngine:
         yaw_err_to_ball = (angle_to_ball - robot_yaw + math.pi) % (2.0 * math.pi) - math.pi
 
         # Ball latch in beak
+        # Scientific Overhaul: Teleportation eradicated. Ball motion is 100% governed by MuJoCo contact physics.
         if self.ball_held:
-            hold_pos = mouth_pos_3d + np.array([0.02, 0.0, -0.01])
-            self.data.qpos[self.controller.ball_qpos_adr:self.controller.ball_qpos_adr + 3] = hold_pos
-            self.data.qvel[self.controller.ball_qvel_adr:self.controller.ball_qvel_adr + 6] = 0.0
+            # Physical interaction: Beak nudge and physical dynamic pushing
+            pass
 
         if self.state == self.STATE_IDLE:
             self.controller.vel_cmd[:] = 0.0
