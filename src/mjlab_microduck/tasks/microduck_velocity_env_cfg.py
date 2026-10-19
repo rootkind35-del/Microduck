@@ -421,19 +421,61 @@ def make_microduck_velocity_env_cfg(
         },
     )
 
-    # 6. Torso forward pitch lean: anticipatory postural adjustment (APA) to keep CoM ahead of stance feet
+    # 6. Torso forward pitch lean: gentle anticipatory postural adjustment (APA)
     cfg.rewards["torso_forward_pitch"] = RewardTermCfg(
         func=microduck_mdp.torso_forward_pitch_reward,
-        weight=2.0,
+        weight=0.8,
         params={
             "command_name": "twist",
             "cmd_threshold": 0.02,
-            "target_forward_lean": 0.08,
+            "target_forward_lean": 0.04,
             "lean_std": 0.05,
         },
     )
 
-    # 7. Double-support stagnation penalty: heavily penalizes freezing/standing still when forward walking is commanded
+    # 7. Bipedal alternating stride: strictly rewards alternating single-support gait (1 leg stance, 1 leg swing)
+    cfg.rewards["bipedal_alternating_stride"] = RewardTermCfg(
+        func=microduck_mdp.bipedal_alternating_stride_reward,
+        weight=2.5,
+        params={
+            "sensor_name": "feet_ground_contact",
+            "contact_force_thresh": 2.0,
+            "command_name": "twist",
+            "cmd_threshold": 0.02,
+        },
+    )
+
+    # 8. Gait air time symmetry penalty: penalizes lopsided stepping (one leg swinging while other stays grounded)
+    cfg.rewards["gait_symmetry"] = RewardTermCfg(
+        func=microduck_mdp.gait_symmetry_penalty,
+        weight=-3.0,  # cost >= 0 -> negative weight
+        params={"sensor_name": "feet_ground_contact"},
+    )
+
+    # 9. Bipedal clearance symmetry penalty: penalizes unequal foot lift heights (one foot high, one foot low)
+    cfg.rewards["bipedal_clearance_symmetry"] = RewardTermCfg(
+        func=microduck_mdp.bipedal_clearance_symmetry_penalty,
+        weight=-2.5,  # cost >= 0 -> negative weight
+        params={
+            "height_sensor_name": "foot_height_scan",
+            "sensor_name": "feet_ground_contact",
+            "swing_force_thresh": 1.5,
+            "command_name": "twist",
+            "cmd_threshold": 0.02,
+        },
+    )
+
+    # 10. Straight walk yaw rate penalty: heavily penalizes pivoting/spinning in circles when commanded to walk straight
+    cfg.rewards["straight_walk_yaw_rate"] = RewardTermCfg(
+        func=microduck_mdp.straight_walk_yaw_rate_penalty,
+        weight=-3.0,  # cost >= 0 -> negative weight
+        params={
+            "command_name": "twist",
+            "yaw_rate_thresh": 0.08,
+        },
+    )
+
+    # 11. Double-support stagnation penalty: heavily penalizes freezing/standing still when forward walking is commanded
     cfg.rewards["double_support_stagnation"] = RewardTermCfg(
         func=microduck_mdp.double_support_stagnation_penalty,
         weight=2.5,  # self-negating <= 0 -> positive weight
@@ -446,7 +488,7 @@ def make_microduck_velocity_env_cfg(
         },
     )
 
-    # 8. Fallen persistence penalty: heavily penalizes lying still/frozen on the ground
+    # 12. Fallen persistence penalty: heavily penalizes lying still/frozen on the ground
     cfg.rewards["fallen_persistence"] = RewardTermCfg(
         func=microduck_mdp.fallen_persistence_penalty,
         weight=3.0,  # self-negating <= 0 -> positive weight
@@ -458,7 +500,7 @@ def make_microduck_velocity_env_cfg(
         },
     )
 
-    # 9. Servo stall penalty: penalizes servos jammed or pushing against locked limbs
+    # 13. Servo stall penalty: penalizes servos jammed or pushing against locked limbs
     cfg.rewards["servo_stall"] = RewardTermCfg(
         func=microduck_mdp.servo_stall_penalty,
         weight=-0.02,  # mjlab cost >= 0 -> negative weight

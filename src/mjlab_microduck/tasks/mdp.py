@@ -8460,7 +8460,7 @@ def smooth_high_step_clearance_reward(
 
     # Gaussian tracking of desired clearance
     clearance_score = torch.exp(-torch.square((foot_height - target_clearance) / clearance_std))
-    swing_score = (clearance_score * is_swing.float()).max(dim=-1).values
+    swing_score = (clearance_score * is_swing.float()).sum(dim=-1)
 
     cmd = env.command_manager.get_command(command_name)
     cmd_active = (torch.nan_to_num(cmd[:, 0], nan=0.0) > cmd_threshold).float()
@@ -8629,3 +8629,93 @@ def torso_forward_pitch_reward(
 
     reward = upright.float() * lean_match * cmd_active
     return torch.nan_to_num(reward, nan=0.0)
+
+
+def bipedal_alternating_stride_reward(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    contact_force_thresh: float = 2.0,
+    command_name: str = "twist",
+    cmd_threshold: float = 0.02,
+) -> torch.Tensor:
+    """Reward strictly alternating bipedal support phases (single-foot swing vs single-foot stance).
+
+    Returns [0, 1] -> weight with POSITIVE sign.
+    Ensures that when moving forward, exactly one foot is bearing weight while the other is airborne.
+    Eliminates stagnation (both feet grounded) and asymmetric hopping.
+    """
+    contact_sensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    fn = torch.linalg.norm(forces, dim=-1)
+
+    left_only = (fn[:, 0] > contact_force_thresh) & (fn[:, 1] <= contact_force_thresh)
+    right_only = (fn[:, 1] > contact_force_thresh) & (fn[:, 0] <= contact_force_thresh)
+    alternating = (left_only | right_only).float()
+
+    cmd = env.command_manager.get_command(command_name)
+    cmd_active = (torch.nan_to_num(cmd[:, 0], nan=0.0) > cmd_threshold).float()
+
+    return alternating * cmd_active
+
+
+def bipedal_clearance_symmetry_penalty(
+    env: ManagerBasedRlEnv,
+    height_sensor_name: str = "foot_height_scan",
+    sensor_name: str = "feet_ground_contact",
+    swing_force_thresh: float = 1.5,
+    command_name: str = "twist",
+    cmd_threshold: float = 0.02,
+) -> torch.Tensor:
+    """Penalize asymmetric foot lifting heights between left and right feet (one foot high, one foot low).
+
+    Accumulates foot height while each foot is in the airborne swing phase:
+      clearance_accum += foot_height * is_swing * dt
+    Penalizes normalized discrepancy:
+      |L_clear - R_clear| / (L_clear + R_clear + 1e-4)
+    Returns [0, 1] >= 0 -> negative weight (mjlab cost convention).
+    """
+    height_sensor = env.scene[height_sensor_name]
+    foot_height = torch.nan_to_num(height_sensor.data.heights, nan=0.0)  # (N, 2)
+
+    contact_sensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    fn = torch.linalg.norm(forces, dim=-1)
+    is_swing = fn < swing_force_thresh
+
+    if not hasattr(env, "_clearance_accum") or env._clearance_accum.shape[0] != env.num_envs:
+        env._clearance_accum = torch.zeros(env.num_envs, 2, device=env.device)
+    reset = env.episode_length_buf <= 1
+    env._clearance_accum[reset] = 0.0
+
+    env._clearance_accum += foot_height * is_swing.float() * env.step_dt
+
+    cmd = env.command_manager.get_command(command_name)
+    cmd_active = (torch.nan_to_num(cmd[:, 0], nan=0.0) > cmd_threshold).float()
+
+    L_clear = env._clearance_accum[:, 0]
+    R_clear = env._clearance_accum[:, 1]
+    discrepancy = torch.abs(L_clear - R_clear) / (L_clear + R_clear + 1e-4)
+    return torch.nan_to_num(discrepancy * cmd_active, nan=0.0)
+
+
+def straight_walk_yaw_rate_penalty(
+    env: ManagerBasedRlEnv,
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    command_name: str = "twist",
+    yaw_rate_thresh: float = 0.08,
+) -> torch.Tensor:
+    """Heavily penalize pivoting/spinning in circles when commanded to walk straight.
+
+    When cmd_wz == 0 (straight walking), charges quadratic cost on |omega_z| > yaw_rate_thresh.
+    Returns >= 0 -> negative weight (mjlab cost convention).
+    """
+    asset: Entity = env.scene[asset_cfg.name]
+    ang_vel_z = torch.abs(asset.data.root_link_ang_vel_b[:, 2])
+
+    cmd = env.command_manager.get_command(command_name)
+    straight_cmd = (torch.abs(torch.nan_to_num(cmd[:, 2], nan=0.0)) < 0.05).float()
+
+    excess_yaw = torch.clamp(ang_vel_z - yaw_rate_thresh, min=0.0)
+    return torch.nan_to_num((excess_yaw ** 2) * straight_cmd, nan=0.0)
+
