@@ -8725,15 +8725,15 @@ def forward_velocity_deficit_penalty(
     asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
     command_name: str = "twist",
     cmd_threshold: float = 0.03,
+    grace_period_s: float = 0.35,
 ) -> torch.Tensor:
     """Strictly penalize failing to achieve commanded forward walking speed.
 
     Returns <= 0 (self-negating microduck penalty) -> weight with POSITIVE sign.
     When forward walking is commanded (cmd_vx > cmd_threshold):
       Charges penalty proportional to the deficit: max(0, cmd_vx - actual_vx_b).
-      If the robot refuses to move (vx_b ~= 0) or walks backward (vx_b < 0),
-      this penalty fires continuously on every step, completely eliminating
-      the standing/shuffling stagnation basin.
+      Includes a 0.35s grace ramp after episode reset to allow natural step initiation
+      without shocking the robot at t=0.
     """
     cmd = env.command_manager.get_command(command_name)
     cmd_vx = torch.nan_to_num(cmd[:, 0], nan=0.0)
@@ -8742,11 +8742,15 @@ def forward_velocity_deficit_penalty(
     asset: Entity = env.scene[asset_cfg.name]
     actual_vx = asset.data.root_link_lin_vel_b[:, 0]
 
+    # Grace period ramp after reset: allows natural step initiation
+    time_in_ep = env.episode_length_buf * env.step_dt
+    grace_scale = torch.clamp(time_in_ep / grace_period_s, 0.0, 1.0)
+
     # Deficit: shortfall from commanded speed
     deficit = torch.clamp(cmd_vx - actual_vx, min=0.0)
     # Normalized deficit cost: 1.0 when completely stopped (vx=0), up to 2.5 if moving backwards
     cost = torch.clamp(deficit / torch.clamp(cmd_vx, min=0.04), min=0.0, max=2.5)
-    return -cost * cmd_active
+    return -cost * cmd_active * grace_scale
 
 
 def stationary_stagnation_penalty(
@@ -8755,12 +8759,12 @@ def stationary_stagnation_penalty(
     command_name: str = "twist",
     cmd_threshold: float = 0.04,
     min_moving_vel: float = 0.03,
+    grace_period_s: float = 0.40,
 ) -> torch.Tensor:
     """Directly penalize the robot for standing still or shuffling in place when commanded to walk.
 
     Returns <= 0 (self-negating microduck penalty) -> weight with POSITIVE sign.
-    Fires at -1.0 whenever cmd_vx > cmd_threshold but actual body forward velocity < min_moving_vel.
-    Inescapable tax on freezing.
+    Includes a 0.40s grace ramp after episode reset to allow initial weight-shift.
     """
     cmd = env.command_manager.get_command(command_name)
     cmd_vx = torch.nan_to_num(cmd[:, 0], nan=0.0)
@@ -8769,6 +8773,9 @@ def stationary_stagnation_penalty(
     asset: Entity = env.scene[asset_cfg.name]
     actual_vx = asset.data.root_link_lin_vel_b[:, 0]
 
+    time_in_ep = env.episode_length_buf * env.step_dt
+    grace_scale = torch.clamp(time_in_ep / grace_period_s, 0.0, 1.0)
+
     is_stagnant = (actual_vx < min_moving_vel).float()
-    return -1.0 * is_stagnant * cmd_active
+    return -1.0 * is_stagnant * cmd_active * grace_scale
 
