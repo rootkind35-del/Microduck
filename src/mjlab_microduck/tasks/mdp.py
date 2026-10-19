@@ -8719,3 +8719,56 @@ def straight_walk_yaw_rate_penalty(
     excess_yaw = torch.clamp(ang_vel_z - yaw_rate_thresh, min=0.0)
     return torch.nan_to_num((excess_yaw ** 2) * straight_cmd, nan=0.0)
 
+
+def forward_velocity_deficit_penalty(
+    env: ManagerBasedRlEnv,
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    command_name: str = "twist",
+    cmd_threshold: float = 0.03,
+) -> torch.Tensor:
+    """Strictly penalize failing to achieve commanded forward walking speed.
+
+    Returns <= 0 (self-negating microduck penalty) -> weight with POSITIVE sign.
+    When forward walking is commanded (cmd_vx > cmd_threshold):
+      Charges penalty proportional to the deficit: max(0, cmd_vx - actual_vx_b).
+      If the robot refuses to move (vx_b ~= 0) or walks backward (vx_b < 0),
+      this penalty fires continuously on every step, completely eliminating
+      the standing/shuffling stagnation basin.
+    """
+    cmd = env.command_manager.get_command(command_name)
+    cmd_vx = torch.nan_to_num(cmd[:, 0], nan=0.0)
+    cmd_active = (cmd_vx > cmd_threshold).float()
+
+    asset: Entity = env.scene[asset_cfg.name]
+    actual_vx = asset.data.root_link_lin_vel_b[:, 0]
+
+    # Deficit: shortfall from commanded speed
+    deficit = torch.clamp(cmd_vx - actual_vx, min=0.0)
+    # Normalized deficit cost: 1.0 when completely stopped (vx=0), up to 2.5 if moving backwards
+    cost = torch.clamp(deficit / torch.clamp(cmd_vx, min=0.04), min=0.0, max=2.5)
+    return -cost * cmd_active
+
+
+def stationary_stagnation_penalty(
+    env: ManagerBasedRlEnv,
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    command_name: str = "twist",
+    cmd_threshold: float = 0.04,
+    min_moving_vel: float = 0.03,
+) -> torch.Tensor:
+    """Directly penalize the robot for standing still or shuffling in place when commanded to walk.
+
+    Returns <= 0 (self-negating microduck penalty) -> weight with POSITIVE sign.
+    Fires at -1.0 whenever cmd_vx > cmd_threshold but actual body forward velocity < min_moving_vel.
+    Inescapable tax on freezing.
+    """
+    cmd = env.command_manager.get_command(command_name)
+    cmd_vx = torch.nan_to_num(cmd[:, 0], nan=0.0)
+    cmd_active = (cmd_vx > cmd_threshold).float()
+
+    asset: Entity = env.scene[asset_cfg.name]
+    actual_vx = asset.data.root_link_lin_vel_b[:, 0]
+
+    is_stagnant = (actual_vx < min_moving_vel).float()
+    return -1.0 * is_stagnant * cmd_active
+

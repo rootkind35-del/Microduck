@@ -286,7 +286,7 @@ def make_microduck_velocity_env_cfg(
         "robot", joint_names=(r"^(?!passive_|.*neck.*|.*head.*).*",)
     )
     cfg.rewards["pose"].params["walking_threshold"] = 0.01
-    cfg.rewards["pose"].weight = 1.0
+    cfg.rewards["pose"].weight = 0.2
 
     # Body-specific reward configurations
     cfg.rewards["upright"].params["asset_cfg"].body_names = ("trunk_base",)
@@ -330,7 +330,7 @@ def make_microduck_velocity_env_cfg(
     # air_time window [0.125, 0.300] s. NOTE: standing still at zero command is
     # taught by the standing_envs curriculum (→25% standing envs by ~iter 2000),
     # not by an explicit stillness/no-stepping term.
-    cfg.rewards["air_time"].weight = 3.0
+    cfg.rewards["air_time"].weight = 4.5
     cfg.rewards["air_time"].params["command_threshold"] = 0.01
     cfg.rewards["air_time"].params["threshold_min"] = 0.125
     cfg.rewards["air_time"].params["threshold_max"] = 0.300
@@ -338,11 +338,11 @@ def make_microduck_velocity_env_cfg(
     cfg.rewards["body_ang_vel"].weight = -0.05
     cfg.rewards["angular_momentum"].weight = -0.02
 
-    # Velocity tracking rewards: tight std (0.12) and high weight (3.5)
+    # Velocity tracking rewards: tight std (0.08) and high weight (5.0)
     # eliminate the zero-velocity stagnation basin where standing still previously
     # scored 80% of max reward. Now standing still pays almost zero, forcing forward locomotion.
-    cfg.rewards["track_linear_velocity"].weight = 3.5
-    cfg.rewards["track_linear_velocity"].params["std"] = 0.12
+    cfg.rewards["track_linear_velocity"].weight = 5.0
+    cfg.rewards["track_linear_velocity"].params["std"] = 0.08
     cfg.rewards["track_angular_velocity"].weight = 2.5
     cfg.rewards["track_angular_velocity"].params["std"] = 0.20
 
@@ -448,14 +448,14 @@ def make_microduck_velocity_env_cfg(
     # 8. Gait air time symmetry penalty: penalizes lopsided stepping (one leg swinging while other stays grounded)
     cfg.rewards["gait_symmetry"] = RewardTermCfg(
         func=microduck_mdp.gait_symmetry_penalty,
-        weight=-3.0,  # cost >= 0 -> negative weight
+        weight=-1.2,  # cost >= 0 -> negative weight
         params={"sensor_name": "feet_ground_contact"},
     )
 
     # 9. Bipedal clearance symmetry penalty: penalizes unequal foot lift heights (one foot high, one foot low)
     cfg.rewards["bipedal_clearance_symmetry"] = RewardTermCfg(
         func=microduck_mdp.bipedal_clearance_symmetry_penalty,
-        weight=-2.5,  # cost >= 0 -> negative weight
+        weight=-1.2,  # cost >= 0 -> negative weight
         params={
             "height_sensor_name": "foot_height_scan",
             "sensor_name": "feet_ground_contact",
@@ -465,13 +465,34 @@ def make_microduck_velocity_env_cfg(
         },
     )
 
-    # 10. Straight walk yaw rate penalty: heavily penalizes pivoting/spinning in circles when commanded to walk straight
+    # 10. Straight walk yaw rate penalty: penalizes pivoting/spinning in circles when commanded to walk straight
     cfg.rewards["straight_walk_yaw_rate"] = RewardTermCfg(
         func=microduck_mdp.straight_walk_yaw_rate_penalty,
-        weight=-3.0,  # cost >= 0 -> negative weight
+        weight=-1.5,  # cost >= 0 -> negative weight
         params={
             "command_name": "twist",
             "yaw_rate_thresh": 0.08,
+        },
+    )
+
+    # 11. Forward velocity deficit penalty ("phạt tiến"): strictly penalizes failing to achieve commanded forward speed
+    cfg.rewards["forward_velocity_deficit"] = RewardTermCfg(
+        func=microduck_mdp.forward_velocity_deficit_penalty,
+        weight=4.0,  # self-negating <= 0 -> positive weight
+        params={
+            "command_name": "twist",
+            "cmd_threshold": 0.03,
+        },
+    )
+
+    # 12. Stationary stagnation penalty: directly penalizes standing still or shuffling in place when commanded to walk
+    cfg.rewards["stationary_stagnation"] = RewardTermCfg(
+        func=microduck_mdp.stationary_stagnation_penalty,
+        weight=3.0,  # self-negating <= 0 -> positive weight
+        params={
+            "command_name": "twist",
+            "cmd_threshold": 0.04,
+            "min_moving_vel": 0.03,
         },
     )
 
@@ -905,14 +926,14 @@ def make_microduck_velocity_env_cfg(
     # While actively commanded to turn, this term automatically unlocks.
     cfg.rewards["heading_hold"] = RewardTermCfg(
         func=microduck_mdp.heading_hold_reward,
-        weight=2.0,
+        weight=1.0,
         params={"command_name": "twist", "std": 0.25},
     )
 
     # Endogenous heading tracking potential within POMDP (Rudin et al., Science Robotics 2022)
     cfg.rewards["track_heading"] = RewardTermCfg(
         func=microduck_mdp.track_heading_potential,
-        weight=2.0,
+        weight=1.0,
         params={"command_name": "twist", "std": 0.25},
     )
 
