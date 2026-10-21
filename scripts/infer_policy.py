@@ -2118,6 +2118,8 @@ def main():
                         help="Target goal destination X coordinate in meters (default: 2.5m)")
     parser.add_argument("--goal-y", type=float, default=0.0,
                         help="Target goal destination Y coordinate in meters (default: 0.0m)")
+    parser.add_argument("--nav-speed", type=float, default=0.08,
+                        help="Cruising forward walking speed for goal navigation in m/s (default: 0.08 m/s)")
     parser.add_argument("--navigate", "--goal", dest="navigate", action="store_true",
                         help="Enable autonomous target goal navigation: robot walks from start to destination target")
     args = parser.parse_args()
@@ -2272,11 +2274,11 @@ def main():
         policy.vel_min_y = 0.0
         policy.vel_max_ang = 1.0      # ±1.0 rad heading error
     else:
-        policy.vel_max_x = 0.3
-        policy.vel_min_x = -0.3
-        policy.vel_max_y = 0.2
-        policy.vel_min_y = -0.2
-        policy.vel_max_ang = 1.5
+        policy.vel_max_x = 0.10
+        policy.vel_min_x = -0.08
+        policy.vel_max_y = 0.08
+        policy.vel_min_y = -0.08
+        policy.vel_max_ang = 0.40
 
     # Set initial position to default pose
     freejoint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "trunk_base_freejoint")
@@ -2417,10 +2419,11 @@ def main():
     quit_requested = False
     focus_camera = getattr(args, "focus", True)
     nav_to_goal = getattr(args, "navigate", False)
+    nav_speed = float(getattr(args, "nav_speed", 0.08))
     goal_overlay = GoalNavigationOverlay(model, policy, goal_x=args.goal_x, goal_y=args.goal_y)
 
     def handle_key(key):
-        nonlocal policy_enabled, quit_requested, focus_camera, nav_to_goal
+        nonlocal policy_enabled, quit_requested, focus_camera, nav_to_goal, nav_speed
         # Map common Vietnamese IME (Unikey/EVKey) characters to standard controls
         _VN_MAP = {"ư": "w", "đ": "d", "â": "a", "ă": "a", "s": "s"}
         key = _VN_MAP.get(key, key)
@@ -2615,6 +2618,18 @@ def main():
                 goal_overlay.goal_y += 0.25
                 goal_overlay.reached = False
                 print(f"\n🎯 Dời mục tiêu sang trái: ({goal_overlay.goal_x:.2f}, {goal_overlay.goal_y:.2f}) m")
+            elif key in ("-", "_"):
+                nav_speed = max(0.04, round(nav_speed - 0.02, 2))
+                policy.vel_max_x = max(0.04, round(policy.vel_max_x - 0.02, 2))
+                if policy.nominal_vel_x > policy.vel_max_x:
+                    policy.set_vel_cmd(policy.vel_max_x, policy.nominal_vel_y, policy.nominal_vel_ang)
+                print(f"\n🐢 [GIẢM TỐC] Đã giảm tốc độ bước đi xuống: {nav_speed:.2f} m/s")
+            elif key in ("+", "="):
+                nav_speed = min(0.18, round(nav_speed + 0.02, 2))
+                policy.vel_max_x = min(0.18, round(policy.vel_max_x + 0.02, 2))
+                if policy.nominal_vel_x > 0.01:
+                    policy.set_vel_cmd(policy.vel_max_x, policy.nominal_vel_y, policy.nominal_vel_ang)
+                print(f"\n⚡ [TĂNG TỐC] Đã tăng tốc độ bước đi lên: {nav_speed:.2f} m/s")
         except Exception as e:
             print(f"Key press error: {e}")
 
@@ -2633,6 +2648,8 @@ def main():
     print("  M:                chuyển sang Waypoint mục tiêu tiếp theo")
     print("  [ / ]:            dời mục tiêu gần hơn / xa hơn (trục X ±0.5m)")
     print("  , / .:            dời mục tiêu sang trái / phải (trục Y ±0.25m)")
+    print("  - / _:            giảm tốc độ bước đi (-0.02 m/s, min 0.04 m/s)")
+    print("  + / =:            tăng tốc độ bước đi (+0.02 m/s, max 0.18 m/s)")
     print("  J:                toggle Stairs Climbing mode (switch to/from --stairs policy)")
     print("  C:                toggle Heading-Lock (giữ tuyệt đối hướng đi thẳng/lùi)")
     print("  V:                toggle Terrain-Adaptive Auto-Slowdown (tự giảm tốc khi gặp gồ ghề)")
@@ -2790,12 +2807,13 @@ def main():
 
                     if dist > 0.15:
                         goal_overlay.reached = False
-                        if abs(yaw_err) > 0.45:  # > ~26 deg: turn towards target
-                            cmd_fwd = 0.05
-                            cmd_yaw = float(np.clip(yaw_err * 2.0, -0.8, 0.8))
+                        if abs(yaw_err) > 0.45:  # > ~26 deg: turn smoothly towards target
+                            cmd_fwd = 0.02
+                            cmd_yaw = float(np.clip(yaw_err * 1.0, -0.35, 0.35))
                         else:
-                            cmd_fwd = float(np.clip(dist * 0.45, 0.12, 0.18))
-                            cmd_yaw = float(np.clip(yaw_err * 1.5, -0.4, 0.4))
+                            # Gentle approach: cruise at nav_speed, slow down smoothly as we approach target
+                            cmd_fwd = float(np.clip(dist * 0.25, 0.04, nav_speed))
+                            cmd_yaw = float(np.clip(yaw_err * 0.8, -0.20, 0.20))
                         policy.set_vel_cmd(cmd_fwd, 0.0, cmd_yaw, verbose=False)
                     else:
                         if not goal_overlay.reached:
