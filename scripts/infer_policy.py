@@ -2046,6 +2046,8 @@ def main():
                         help="Automatically toss the ball at t=0.5s to demonstrate the full Autonomous Fetch pipeline")
     parser.add_argument("--hud", action="store_true",
                         help="Display the in-viewer PiP camera HUD in top-right corner (off by default for maximum FPS)")
+    parser.add_argument("--focus", action=argparse.BooleanOptionalAction, default=True,
+                        help="Smoothly track and focus camera lookat on the robot as it moves (default: True, disable with --no-focus)")
     args = parser.parse_args()
 
     if args.walking and "stairs" in os.path.basename(args.walking).lower() and not args.stairs:
@@ -2507,6 +2509,9 @@ def main():
                 policy.toggle_heading_lock()
             elif key == "v":
                 policy.toggle_auto_slowdown()
+            elif key == "o":
+                focus_camera = not focus_camera
+                print(f"Camera Auto-Focus: {'ON (Tracking robot)' if focus_camera else 'OFF (Free camera)'}")
         except Exception as e:
             print(f"Key press error: {e}")
 
@@ -2524,6 +2529,7 @@ def main():
     print("  J:                toggle Stairs Climbing mode (switch to/from --stairs policy)")
     print("  C:                toggle Heading-Lock (giữ tuyệt đối hướng đi thẳng/lùi)")
     print("  V:                toggle Terrain-Adaptive Auto-Slowdown (tự giảm tốc khi gặp gồ ghề)")
+    print("  O:                toggle Camera Auto-Focus/Tracking on/off (camera tự dõi theo robot)")
     print("  T:                toggle policy inference on/off (paused = motors hold last target)")
     print("  F:                Auto-Fetch: ném bóng vào sân và robot tự chạy tới gắp về (bấm F lần nữa để dừng)")
     print("  X:                Chỉ ném bóng vào sân (toss ball): robot đứng yên đợi cho tới khi bấm F")
@@ -2599,6 +2605,7 @@ def main():
         model, data, show_left_ui=False, show_right_ui=False, key_callback=viewer_key_callback)
 
     with term, viewer_ctx as viewer:
+        focus_camera = getattr(args, "focus", True)
         odom_overlay = OdomAnchorOverlay(model, load_odom_anchor_sets(args.odom_anchor_points)) \
             if (args.odom_anchor_points and viewer.user_scn is not None) else None
         odom_compare = OdomCompare(model, load_odom_anchor_sets()) if args.odom_compare else None
@@ -2898,6 +2905,14 @@ def main():
                     odom_overlay.draw(data, viewer.user_scn, odom_compare)
                 if target_overlay is not None and viewer.user_scn is not None:
                     target_overlay.draw(data, viewer.user_scn)
+
+                if not args.headless and viewer is not None and focus_camera:
+                    robot_x = float(data.qpos[qpos_adr + 0])
+                    robot_y = float(data.qpos[qpos_adr + 1])
+                    robot_z = float(data.qpos[qpos_adr + 2])
+                    viewer.cam.lookat[0] = robot_x
+                    viewer.cam.lookat[1] = robot_y
+                    viewer.cam.lookat[2] = robot_z + 0.05
 
                 t_sync_0 = time.perf_counter()
                 viewer.sync()
