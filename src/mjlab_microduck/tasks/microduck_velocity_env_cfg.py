@@ -381,15 +381,27 @@ def make_microduck_velocity_env_cfg(
     # 3. Active swing knee flexion: flexes knee to elevate swing foot over rough terrain
     cfg.rewards["swing_knee_flexion"] = RewardTermCfg(
         func=microduck_mdp.swing_knee_flexion_reward,
-        weight=2.0,
+        weight=1.2,  # was 2.0 -> moderate so it doesn't destabilize stance
         params={
             "sensor_name": "feet_ground_contact",
-            "stance_force_thresh": 3.5,
+            "stance_force_thresh": 3.0,
             "swing_force_thresh": 1.5,
-            "target_knee_flex": 0.45,
+            "target_knee_flex": 0.25,  # was 0.45 -> moderate flexion
             "knee_std": 0.20,
             "command_name": "twist",
             "cmd_threshold": 0.02,
+        },
+    )
+
+    # 3b. Stance knee extension: keeps weight-bearing leg straight to hold trunk at 120mm
+    cfg.rewards["stance_knee_extension"] = RewardTermCfg(
+        func=microduck_mdp.stance_knee_extension_reward,
+        weight=2.0,
+        params={
+            "sensor_name": "feet_ground_contact",
+            "stance_force_thresh": 2.5,
+            "target_knee_ext": 0.0,
+            "knee_std": 0.15,
         },
     )
 
@@ -424,12 +436,31 @@ def make_microduck_velocity_env_cfg(
     # 6. Torso forward pitch lean: gentle anticipatory postural adjustment (APA)
     cfg.rewards["torso_forward_pitch"] = RewardTermCfg(
         func=microduck_mdp.torso_forward_pitch_reward,
-        weight=0.8,
+        weight=0.6,  # was 0.8
         params={
             "command_name": "twist",
             "cmd_threshold": 0.02,
-            "target_forward_lean": 0.04,
+            "target_forward_lean": 0.025,  # was 0.04 -> gentle 1.4 deg lean
             "lean_std": 0.05,
+        },
+    )
+
+    # 6b. Base height tracking: keeps trunk base at upright standing/walking height (~118mm)
+    cfg.rewards["base_height_tracking"] = RewardTermCfg(
+        func=microduck_mdp.base_height_tracking_reward,
+        weight=2.5,
+        params={
+            "target_height": 0.118,
+            "height_std": 0.015,
+        },
+    )
+
+    # 6c. Base height deficit penalty: strictly penalizes crouching/kneeling (root_z < 100mm)
+    cfg.rewards["base_height_deficit"] = RewardTermCfg(
+        func=microduck_mdp.base_height_deficit_penalty,
+        weight=3.5,  # self-negating <= 0 -> positive weight
+        params={
+            "min_height": 0.100,
         },
     )
 

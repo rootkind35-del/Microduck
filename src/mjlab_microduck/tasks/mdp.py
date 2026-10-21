@@ -8779,3 +8779,73 @@ def stationary_stagnation_penalty(
     is_stagnant = (actual_vx < min_moving_vel).float()
     return -1.0 * is_stagnant * cmd_active * grace_scale
 
+
+def base_height_tracking_reward(
+    env: ManagerBasedRlEnv,
+    target_height: float = 0.120,
+    height_std: float = 0.015,
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+    """Reward keeping trunk base at normal upright bipedal standing/walking height (~120mm).
+
+    Returns >= 0 (Gaussian reward) -> weight with POSITIVE sign.
+    Discourages the robot from crouching/kneeling down to 40mm.
+    """
+    asset: Entity = env.scene[asset_cfg.name]
+    root_z = asset.data.root_link_pos_w[:, 2]
+    height_err = root_z - target_height
+    return torch.exp(-torch.square(height_err) / (height_std**2))
+
+
+def base_height_deficit_penalty(
+    env: ManagerBasedRlEnv,
+    min_height: float = 0.105,
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+    """Penalize the robot when its trunk drops below minimum safe height (crouching/kneeling).
+
+    Returns <= 0 (self-negating microduck penalty) -> weight with POSITIVE sign.
+    When root_z < min_height (e.g. 105mm), charges cost proportional to (min_height - root_z).
+    Completely eliminates the crouching/kneeling basin.
+    """
+    asset: Entity = env.scene[asset_cfg.name]
+    root_z = asset.data.root_link_pos_w[:, 2]
+    deficit = torch.clamp(min_height - root_z, min=0.0)
+    # Scale: 0 when root_z >= 105mm, -1.0 when root_z = 70mm (~35mm deficit)
+    cost = torch.clamp(deficit / 0.035, min=0.0, max=3.0)
+    return -cost
+
+
+def stance_knee_extension_reward(
+    env: ManagerBasedRlEnv,
+    sensor_name: str = "feet_ground_contact",
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+    stance_force_thresh: float = 2.5,
+    target_knee_ext: float = 0.0,
+    knee_std: float = 0.15,
+) -> torch.Tensor:
+    """Reward knee extension (straightening) on the weight-bearing stance leg.
+
+    Returns [0, 1] -> weight with POSITIVE sign.
+    When a leg is on the ground bearing weight (> stance_force_thresh),
+    actively rewards keeping the knee near 0.0 rad (straight leg).
+    This prevents the stance leg from buckling/crouching under the 800g body weight.
+    """
+    contact_sensor = env.scene[sensor_name]
+    forces = torch.nan_to_num(contact_sensor.data.force, nan=0.0)
+    fn = torch.linalg.norm(forces, dim=-1)  # (num_envs, 2) [left, right]
+
+    asset: Entity = env.scene[asset_cfg.name]
+    qpos = _servo_joint_pos(env, asset)
+    # Left knee = idx 3, Right knee = idx 12
+    left_ext = torch.exp(-torch.square((qpos[:, 3] - target_knee_ext) / knee_std))
+    right_ext = torch.exp(-torch.square((qpos[:, 12] - target_knee_ext) / knee_std))
+
+    left_stance = (fn[:, 0] > stance_force_thresh).float()
+    right_stance = (fn[:, 1] > stance_force_thresh).float()
+
+    total_stance = left_stance + right_stance
+    active_ext = (left_ext * left_stance + right_ext * right_stance) / (torch.clamp(total_stance, min=1.0))
+    has_contact = (total_stance > 0.5).float()
+    return torch.nan_to_num(active_ext * has_contact, nan=0.0)
+
