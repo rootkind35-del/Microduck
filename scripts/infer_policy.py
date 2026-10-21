@@ -540,10 +540,10 @@ class PolicyInference:
 
         # Velocity command [lin_vel_x, lin_vel_y, ang_vel_z] — controls walking / policy switching
         self.vel_cmd = np.zeros(3, dtype=np.float32)
-        # Closed-loop Heading-Lock & Adaptive Terrain Locomotion (OFF by default, toggle via C and V)
-        self.heading_lock_enabled = False
+        # Closed-loop Heading-Lock & Adaptive Terrain Locomotion (ON by default for laser-straight walking)
+        self.heading_lock_enabled = True
         self.target_yaw = None
-        self.heading_kp = 0.6
+        self.heading_kp = 2.2
         self.auto_slowdown_enabled = False
         self.nominal_vel_x = 0.0
         self.nominal_vel_y = 0.0
@@ -2809,11 +2809,11 @@ def main():
                         goal_overlay.reached = False
                         if abs(yaw_err) > 0.45:  # > ~26 deg: turn smoothly towards target
                             cmd_fwd = 0.02
-                            cmd_yaw = float(np.clip(yaw_err * 1.0, -0.35, 0.35))
+                            cmd_yaw = float(np.clip(yaw_err * 1.5, -0.45, 0.45))
                         else:
                             # Gentle approach: cruise at nav_speed, slow down smoothly as we approach target
                             cmd_fwd = float(np.clip(dist * 0.25, 0.04, nav_speed))
-                            cmd_yaw = float(np.clip(yaw_err * 0.8, -0.20, 0.20))
+                            cmd_yaw = float(np.clip(yaw_err * 2.2, -0.40, 0.40))
                         policy.set_vel_cmd(cmd_fwd, 0.0, cmd_yaw, verbose=False)
                     else:
                         if not goal_overlay.reached:

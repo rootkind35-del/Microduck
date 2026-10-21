@@ -25,7 +25,7 @@ NUM_STEPS_PER_ENV = 24
 TURN_IN_PLACE_FRACTION = 0.15
 
 # Symmetry
-ENABLE_SYMMETRY = False
+ENABLE_SYMMETRY = True
 
 # Domain randomization toggles
 ENABLE_COM_RANDOMIZATION = True
@@ -957,8 +957,8 @@ def make_microduck_velocity_env_cfg(
     # While actively commanded to turn, this term automatically unlocks.
     cfg.rewards["heading_hold"] = RewardTermCfg(
         func=microduck_mdp.heading_hold_reward,
-        weight=1.0,
-        params={"command_name": "twist", "std": 0.25},
+        weight=2.5,
+        params={"command_name": "twist", "std": 0.20},
     )
 
     # Endogenous heading tracking potential within POMDP (Rudin et al., Science Robotics 2022)
