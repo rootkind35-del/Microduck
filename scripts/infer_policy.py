@@ -1953,6 +1953,72 @@ class TargetLockOverlay:
             scn.ngeom += 1
 
 
+class GoalNavigationOverlay:
+    """Draws a 3D target destination marker, beacon pole, and guide beam in viewer.user_scn."""
+
+    TARGET_ACTIVE_RGBA = (0.1, 0.95, 0.35, 0.85)     # Bright green
+    TARGET_REACHED_RGBA = (1.0, 0.85, 0.1, 0.95)     # Glowing gold
+    BEAM_RGBA = (0.2, 0.85, 1.0, 0.6)                # Cyan guide line
+
+    def __init__(self, model, policy, goal_x=2.5, goal_y=0.0):
+        self.model = model
+        self.policy = policy
+        self.goal_x = float(goal_x)
+        self.goal_y = float(goal_y)
+        self.active = True
+        self.reached = False
+        self.waypoints = [(2.0, 0.0), (2.5, 0.4), (3.0, -0.4), (3.5, 0.0), (1.5, 0.0)]
+        self.wp_idx = 0
+
+    def next_waypoint(self):
+        self.wp_idx = (self.wp_idx + 1) % len(self.waypoints)
+        self.goal_x, self.goal_y = self.waypoints[self.wp_idx]
+        self.reached = False
+        print(f"\n🎯 [MỤC TIÊU MỚI] Đã chuyển sang Waypoint {self.wp_idx + 1}: ({self.goal_x:.2f}, {self.goal_y:.2f}) m")
+
+    def draw(self, data, scn, qpos_adr):
+        if scn is None or not self.active:
+            return
+        target_pos = np.array([self.goal_x, self.goal_y, 0.005], dtype=np.float64)
+        robot_pos = data.qpos[qpos_adr:qpos_adr + 3]
+
+        color = self.TARGET_REACHED_RGBA if self.reached else self.TARGET_ACTIVE_RGBA
+
+        # 1. Target Disc on the ground
+        if scn.ngeom < scn.maxgeom:
+            g = scn.geoms[scn.ngeom]
+            mujoco.mjv_initGeom(g, mujoco.mjtGeom.mjGEOM_CYLINDER, np.array([0.12, 0.004, 0.0]),
+                                target_pos, np.eye(3).flatten(), np.array(color, dtype=np.float32))
+            scn.ngeom += 1
+
+        # 2. Target Beacon Pole (vertical pole with sphere on top)
+        top_pos = target_pos + np.array([0, 0, 0.28])
+        if scn.ngeom < scn.maxgeom:
+            g = scn.geoms[scn.ngeom]
+            mujoco.mjv_initGeom(g, mujoco.mjtGeom.mjGEOM_CAPSULE, np.zeros(3), np.zeros(3),
+                                np.eye(3).flatten(), np.array(color, dtype=np.float32))
+            mujoco.mjv_connector(g, mujoco.mjtGeom.mjGEOM_CAPSULE, 0.004,
+                                 np.asarray(target_pos, dtype=np.float64), np.asarray(top_pos, dtype=np.float64))
+            scn.ngeom += 1
+
+        # Beacon Top Sphere
+        if scn.ngeom < scn.maxgeom:
+            g = scn.geoms[scn.ngeom]
+            mujoco.mjv_initGeom(g, mujoco.mjtGeom.mjGEOM_SPHERE, np.array([0.025, 0, 0]),
+                                top_pos, np.eye(3).flatten(), np.array(color, dtype=np.float32))
+            scn.ngeom += 1
+
+        # 3. Dynamic Guide Line (Sight beam from robot chest to target)
+        chest_pos = robot_pos + np.array([0, 0, 0.06])
+        if scn.ngeom < scn.maxgeom:
+            g = scn.geoms[scn.ngeom]
+            mujoco.mjv_initGeom(g, mujoco.mjtGeom.mjGEOM_CAPSULE, np.zeros(3), np.zeros(3),
+                                np.eye(3).flatten(), np.array(self.BEAM_RGBA, dtype=np.float32))
+            mujoco.mjv_connector(g, mujoco.mjtGeom.mjGEOM_CAPSULE, 0.002,
+                                 np.asarray(chest_pos, dtype=np.float64), np.asarray(target_pos, dtype=np.float64))
+            scn.ngeom += 1
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run ONNX policy in MuJoCo")
     parser.add_argument("--roller", action="store_true", help="Use roller skate robot XML (robot_walk_rollers.xml)")
@@ -2048,6 +2114,12 @@ def main():
                         help="Display the in-viewer PiP camera HUD in top-right corner (off by default for maximum FPS)")
     parser.add_argument("--focus", action=argparse.BooleanOptionalAction, default=True,
                         help="Smoothly track and focus camera lookat on the robot as it moves (default: True, disable with --no-focus)")
+    parser.add_argument("--goal-x", type=float, default=2.5,
+                        help="Target goal destination X coordinate in meters (default: 2.5m)")
+    parser.add_argument("--goal-y", type=float, default=0.0,
+                        help="Target goal destination Y coordinate in meters (default: 0.0m)")
+    parser.add_argument("--navigate", "--goal", dest="navigate", action="store_true",
+                        help="Enable autonomous target goal navigation: robot walks from start to destination target")
     args = parser.parse_args()
 
     if args.walking and "stairs" in os.path.basename(args.walking).lower() and not args.stairs:
@@ -2058,10 +2130,8 @@ def main():
         args.new_cmd_obs = True
         if args.scene is None or args.scene == MICRODUCK_XML:
             args.scene = "src/mjlab_microduck/robot/microduck/scene_stairs.xml"
-    if args.sitstand and not args.new_cmd_obs:
-        parser.error("--sitstand policies use the unified 13D command obs (61D); add --new-cmd-obs")
-    if (args.kick_left or args.kick_right or args.roulade or args.standup or args.stairs) and not args.new_cmd_obs:
-        parser.error("--kick-left/--kick-right/--roulade/--standup/--stairs policies use the unified 13D command obs (61D); add --new-cmd-obs")
+    if (args.sitstand or args.kick_left or args.kick_right or args.roulade or args.standup or args.stairs) and not args.new_cmd_obs:
+        args.new_cmd_obs = True
     if (args.kick_left or args.kick_right or args.roulade) and args.roller:
         parser.error("kick/roulade policies are trained on the walking robot, not the roller model")
 
@@ -2345,14 +2415,21 @@ def main():
     # shortcuts. `key` is a symbolic name: "up"/"down"/"left"/"right", " ", or
     # a lowercase letter.
     quit_requested = False
+    focus_camera = getattr(args, "focus", True)
+    nav_to_goal = getattr(args, "navigate", False)
+    goal_overlay = GoalNavigationOverlay(model, policy, goal_x=args.goal_x, goal_y=args.goal_y)
 
     def handle_key(key):
-        nonlocal policy_enabled, quit_requested
+        nonlocal policy_enabled, quit_requested, focus_camera, nav_to_goal
         # Map common Vietnamese IME (Unikey/EVKey) characters to standard controls
         _VN_MAP = {"ư": "w", "đ": "d", "â": "a", "ă": "a", "s": "s"}
         key = _VN_MAP.get(key, key)
         try:
             if key in ("up", "down", "left", "right", "a", "e", "w", "s", "d", " "):
+
+                if nav_to_goal:
+                    nav_to_goal = False
+                    print("[Manual Control] Bàn phím can thiệp -> Tắt chế độ tự đi đến mục tiêu (bấm N để bật lại)")
 
                 if policy.fetch_mode and not policy.head_mode and not policy.body_pose_mode:
                     policy.fetch_mode = False
@@ -2512,6 +2589,32 @@ def main():
             elif key == "o":
                 focus_camera = not focus_camera
                 print(f"Camera Auto-Focus: {'ON (Tracking robot)' if focus_camera else 'OFF (Free camera)'}")
+            elif key == "n":
+                nav_to_goal = not nav_to_goal
+                if nav_to_goal:
+                    goal_overlay.reached = False
+                else:
+                    policy.set_vel_cmd(0.0, 0.0, 0.0)
+                state_str = "BẬT (Robot tự động đi tới đích)" if nav_to_goal else "TẮT (Robot dừng lại)"
+                print(f"\n🎯 [MỤC TIÊU DẪN ĐƯỜNG] {state_str} | Đích đến: ({goal_overlay.goal_x:.2f}, {goal_overlay.goal_y:.2f}) m")
+            elif key == "m":
+                goal_overlay.next_waypoint()
+            elif key == "]":
+                goal_overlay.goal_x += 0.5
+                goal_overlay.reached = False
+                print(f"\n🎯 Dời mục tiêu xa hơn: ({goal_overlay.goal_x:.2f}, {goal_overlay.goal_y:.2f}) m")
+            elif key == "[":
+                goal_overlay.goal_x = max(0.2, goal_overlay.goal_x - 0.5)
+                goal_overlay.reached = False
+                print(f"\n🎯 Dời mục tiêu gần hơn: ({goal_overlay.goal_x:.2f}, {goal_overlay.goal_y:.2f}) m")
+            elif key == ".":
+                goal_overlay.goal_y -= 0.25
+                goal_overlay.reached = False
+                print(f"\n🎯 Dời mục tiêu sang phải: ({goal_overlay.goal_x:.2f}, {goal_overlay.goal_y:.2f}) m")
+            elif key == ",":
+                goal_overlay.goal_y += 0.25
+                goal_overlay.reached = False
+                print(f"\n🎯 Dời mục tiêu sang trái: ({goal_overlay.goal_x:.2f}, {goal_overlay.goal_y:.2f}) m")
         except Exception as e:
             print(f"Key press error: {e}")
 
@@ -2526,6 +2629,10 @@ def main():
         print("  LEFT/RIGHT arrow: strafe left/right (lin_vel_y)")
         print("  A / D (or E):     turn left/right (ang_vel_z)")
     print("  SPACE:            stop / coast (zero all commands)")
+    print("  N:                bật/tắt chế độ tự đi đến mục tiêu (Autonomous Goal Navigation)")
+    print("  M:                chuyển sang Waypoint mục tiêu tiếp theo")
+    print("  [ / ]:            dời mục tiêu gần hơn / xa hơn (trục X ±0.5m)")
+    print("  , / .:            dời mục tiêu sang trái / phải (trục Y ±0.25m)")
     print("  J:                toggle Stairs Climbing mode (switch to/from --stairs policy)")
     print("  C:                toggle Heading-Lock (giữ tuyệt đối hướng đi thẳng/lùi)")
     print("  V:                toggle Terrain-Adaptive Auto-Slowdown (tự giảm tốc khi gặp gồ ghề)")
@@ -2605,7 +2712,8 @@ def main():
         model, data, show_left_ui=False, show_right_ui=False, key_callback=viewer_key_callback)
 
     with term, viewer_ctx as viewer:
-        focus_camera = getattr(args, "focus", True)
+        if nav_to_goal:
+            print(f"\n🎯 [MỤC TIÊU DẪN ĐƯỜNG] ĐÃ BẬT | Tọa độ đích đến: ({goal_overlay.goal_x:.2f}, {goal_overlay.goal_y:.2f}) m")
         odom_overlay = OdomAnchorOverlay(model, load_odom_anchor_sets(args.odom_anchor_points)) \
             if (args.odom_anchor_points and viewer.user_scn is not None) else None
         odom_compare = OdomCompare(model, load_odom_anchor_sets()) if args.odom_compare else None
@@ -2615,6 +2723,8 @@ def main():
                 odom_overlay.draw(data, viewer.user_scn, odom_compare)
             if target_overlay is not None:
                 target_overlay.draw(data, viewer.user_scn)
+            if goal_overlay is not None:
+                goal_overlay.draw(data, viewer.user_scn, qpos_adr)
         viewer.sync()
         start_time = time.time()
 
@@ -2668,6 +2778,31 @@ def main():
                 policy.update_fetch(sim_dt)
                 policy.update_adaptive_locomotion(sim_dt)
                 policy.update_hand_toss_animation(sim_dt)
+
+                if nav_to_goal:
+                    trunk_id = policy.trunk_base_id
+                    rot = data.xmat[trunk_id].reshape(3, 3)
+                    robot_pos = data.xpos[trunk_id][:2]
+                    rel_w = np.array([goal_overlay.goal_x, goal_overlay.goal_y], dtype=np.float64) - robot_pos
+                    rel_b = rot[:2, :2].T @ rel_w
+                    dist = float(np.hypot(rel_b[0], rel_b[1]))
+                    yaw_err = float(math.atan2(rel_b[1], rel_b[0]))
+
+                    if dist > 0.15:
+                        goal_overlay.reached = False
+                        if abs(yaw_err) > 0.45:  # > ~26 deg: turn towards target
+                            cmd_fwd = 0.05
+                            cmd_yaw = float(np.clip(yaw_err * 2.0, -0.8, 0.8))
+                        else:
+                            cmd_fwd = float(np.clip(dist * 0.45, 0.12, 0.18))
+                            cmd_yaw = float(np.clip(yaw_err * 1.5, -0.4, 0.4))
+                        policy.set_vel_cmd(cmd_fwd, 0.0, cmd_yaw, verbose=False)
+                    else:
+                        if not goal_overlay.reached:
+                            goal_overlay.reached = True
+                            policy.set_vel_cmd(0.0, 0.0, 0.0, verbose=False)
+                            print(f"\n🎯 [ĐÃ ĐẾN ĐÍCH THÀNH CÔNG] Robot đã đi từ đầu đến cuối đến mục tiêu ({goal_overlay.goal_x:.2f}, {goal_overlay.goal_y:.2f}) m!")
+                            print(f"   Khoảng cách sai số: {dist*1000:.1f} mm. Robot đứng vững vàng tại đích!\n")
 
                 if record_frames is not None and control_step_count % frame_interval == 0:
                     if render_cam is not None:
@@ -2905,6 +3040,8 @@ def main():
                     odom_overlay.draw(data, viewer.user_scn, odom_compare)
                 if target_overlay is not None and viewer.user_scn is not None:
                     target_overlay.draw(data, viewer.user_scn)
+                if goal_overlay is not None and viewer.user_scn is not None:
+                    goal_overlay.draw(data, viewer.user_scn, qpos_adr)
 
                 if not args.headless and viewer is not None and focus_camera:
                     robot_x = float(data.qpos[qpos_adr + 0])
