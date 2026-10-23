@@ -1,0 +1,104 @@
+{
+  "hermes_plan": {
+    "planner": "Hermes Local Workflow & Curriculum Architect (Argon / Local Nemotron-Compatible Schema)",
+    "generated_at": "2026-10-23T11:40:08.862122+00:00",
+    "hardware_targets": {
+      "gpu_compute": "NVIDIA GeForce RTX 4060 Laptop GPU",
+      "cuda_version": "12.8",
+      "opengl_renderer": "egl"
+    },
+    "obstacle_course_zones": [
+      {
+        "zone_id": 1,
+        "name": "3D Cobblestone Rough Field (h=2.5..6.0mm) & Slalom Pylons (x=0.16..0.34m)",
+        "perception_modality": "OpenGL head_camera [ROUGH] + [PYLON] HSV & Metric Depth",
+        "locomotion_skill": "walking_rough.onnx / walking.onnx + StairStepBooster L1 probe"
+      },
+      {
+        "zone_id": 2,
+        "name": "Progressive Staircase Step 1 & Step 2 (x=0.42m [8mm], x=0.52m [16mm])",
+        "perception_modality": "OpenGL head_camera [STAIR] Mask + ToF Rangefinder + Riser Force Probe",
+        "locomotion_skill": "NekoCore C\u00b2 handoff -> StairStepBooster (L2-L4 swing knee/ankle boost & stance counter-pitch lean)"
+      },
+      {
+        "zone_id": 3,
+        "name": "Summit Platform Step 3 (x=0.68m, cumulative elevation=24mm)",
+        "perception_modality": "Pitch IMU + ToF + Summit Elevation Verification",
+        "locomotion_skill": "Stance push-off & summit landing stabilization"
+      },
+      {
+        "zone_id": 4,
+        "name": "Emerald Summit Goal Beacon (x=0.75m, z=0.094m)",
+        "perception_modality": "OpenGL head_camera [GOAL] Centroid & Metric Depth <= 0.20m",
+        "locomotion_skill": "NekoCore C\u00b2 QuinticSkillBlender + GaitPhaseLatch -> standing.onnx"
+      }
+    ]
+  },
+  "see_and_walk_execution": {
+    "scene_xml": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/scene_vision_obstacle_course.xml",
+    "opengl_backend": "egl",
+    "cuda_rtx_device": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "duration_s": 11.0,
+    "total_control_steps": 550,
+    "start_pos_xyz_m": [
+      0.0008,
+      0.0,
+      0.1156
+    ],
+    "final_pos_xyz_m": [
+      0.8184,
+      0.0028,
+      0.1463
+    ],
+    "max_forward_x_m": 0.8272,
+    "peak_trunk_z_mm": 156.52,
+    "elevation_gain_dz_mm": 40.96,
+    "max_tilt_deg": 12.48,
+    "min_bam_voltage_v": 6.96,
+    "rough_visual_detections_frames": 84,
+    "pylon_visual_detections_frames": 100,
+    "hurdle_visual_detections_frames": 538,
+    "stair_visual_detections_frames": 538,
+    "goal_visual_detections_frames": 170,
+    "stair_mode_transitioned": true,
+    "goal_reached_and_neko_transitioned": true,
+    "survived_without_fall": true,
+    "dual_view_gif": "/home/dhp01/microduck_rl/docs_and_logs/microduck_see_and_walk_rollout.gif",
+    "trajectory_csv": "/home/dhp01/microduck_rl/docs_and_logs/microduck_see_and_walk_trajectory.csv",
+    "keyframes_dir": "/home/dhp01/microduck_rl/docs_and_logs/see_and_walk_frames"
+  },
+  "dedicated_rough_terrain_rollout": {
+    "scene_xml": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/scene_rough.xml",
+    "policy_used": "/home/dhp01/microduck_rl/rough_latest.onnx",
+    "duration_s": 8.0,
+    "start_x_m": 0.0008,
+    "final_x_m": 1.6138,
+    "max_forward_x_m": 1.6183,
+    "start_z_mm": 115.56,
+    "final_z_mm": 116.37,
+    "peak_z_mm": 129.01,
+    "elevation_gain_dz_mm": 13.45,
+    "max_tilt_deg": 4.37,
+    "min_bam_voltage_v": 7.003,
+    "survived_without_fall": true,
+    "rollout_gif": "/home/dhp01/microduck_rl/docs_and_logs/microduck_rough_terrain_rollout.gif",
+    "trajectory_csv": "/home/dhp01/microduck_rl/docs_and_logs/microduck_rough_terrain_trajectory.csv"
+  },
+  "dedicated_high_stairs_rollout": {
+    "scene_xml": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/scene_stairs.xml",
+    "policy_used": "/home/dhp01/microduck_rl/rough_latest.onnx",
+    "duration_s": 9.0,
+    "start_x_m": 0.0008,
+    "final_x_m": 2.2788,
+    "max_forward_x_m": 2.2788,
+    "start_z_mm": 115.56,
+    "final_z_mm": 228.44,
+    "peak_z_mm": 235.15,
+    "elevation_gain_dz_mm": 119.59,
+    "max_tilt_deg": 7.65,
+    "min_bam_voltage_v": 6.917,
+    "survived_without_fall": true,
+    "rollout_gif": "/home/dhp01/microduck_rl/docs_and_logs/microduck_stairs_climb_rollout.gif",
+    "trajectory_csv": "/home/dhp01/microduck_rl/docs_and_logs/microduck_stairs_climb_trajectory.csv"
+  }
+}

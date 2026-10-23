@@ -1,0 +1,279 @@
+{
+  "stage": "Stage B (Part 2) - URDF & Omniverse OpenUSD SimReady Compiler",
+  "generated_at": "2026-10-23T15:22:44.945724+00:00",
+  "source_mjcf": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/robot_groundcontact.xml",
+  "total_links": 15,
+  "total_joints": 14,
+  "actuated_servo_count": 14,
+  "canonical_14_servo_match": true,
+  "all_joint_limits_valid": true,
+  "total_robot_mass_kg": 0.73724,
+  "visual_geoms_count": 70,
+  "collision_geoms_count": 10,
+  "xl330_drive_spec": {
+    "max_effort_nm": 0.963,
+    "max_velocity_rad_s": 9.95,
+    "bam_stiffness_nm_rad": 6.91,
+    "bam_damping_nms_rad": 0.258
+  },
+  "outputs": {
+    "urdf": "/home/dhp01/microduck_rl/02_blender_omniverse_usd/usd_assets/microduck.urdf",
+    "robot_simready_usda": "/home/dhp01/microduck_rl/02_blender_omniverse_usd/usd_assets/microduck_simready.usda",
+    "terrain_course_usda": "/home/dhp01/microduck_rl/02_blender_omniverse_usd/usd_assets/terrain_course.usda",
+    "terrain_collider_primitives": 25
+  },
+  "joints_detail": [
+    {
+      "name": "left_hip_yaw",
+      "parent_body": "trunk_base",
+      "child_body": "yaw2roll",
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "lower_rad": -0.4363323129985824,
+      "upper_rad": 0.5235987755982988,
+      "effort_nm": 0.963,
+      "velocity_rad_s": 9.95,
+      "stiffness": 6.91,
+      "damping": 0.258,
+      "armature": 0.0018,
+      "is_passive": false
+    },
+    {
+      "name": "left_hip_roll",
+      "parent_body": "yaw2roll",
+      "child_body": "hip_l",
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "lower_rad": -0.3839724354386992,
+      "upper_rad": 0.38397243543880577,
+      "effort_nm": 0.963,
+      "velocity_rad_s": 9.95,
+      "stiffness": 6.91,
+      "damping": 0.258,
+      "armature": 0.0018,
+      "is_passive": false
+    },
+    {
+      "name": "left_hip_pitch",
+      "parent_body": "hip_l",
+      "child_body": "upper_leg_left",
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "lower_rad": -1.570796326794949,
+      "upper_rad": 1.5707963267948442,
+      "effort_nm": 0.963,
+      "velocity_rad_s": 9.95,
+      "stiffness": 6.91,
+      "damping": 0.258,
+      "armature": 0.0018,
+      "is_passive": false
+    },
+    {
+      "name": "left_knee",
+      "parent_body": "upper_leg_left",
+      "child_body": "leg",
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "lower_rad": -1.5707963267948983,
+      "upper_rad": 1.5707963267948948,
+      "effort_nm": 0.963,
+      "velocity_rad_s": 9.95,
+      "stiffness": 6.91,
+      "damping": 0.258,
+      "armature": 0.0018,
+      "is_passive": false
+    },
+    {
+      "name": "left_ankle",
+      "parent_body": "leg",
+      "child_body": "ankle_left",
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "lower_rad": -1.5707963267949063,
+      "upper_rad": 1.5707963267948868,
+      "effort_nm": 0.963,
+      "velocity_rad_s": 9.95,
+      "stiffness": 6.91,
+      "damping": 0.258,
+      "armature": 0.0018,
+      "is_passive": false
+    },
+    {
+      "name": "neck_pitch",
+      "parent_body": "trunk_base",
+      "child_body": "neck",
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "lower_rad": -1.5707963267948974,
+      "upper_rad": 1.0471975511965967,
+      "effort_nm": 0.963,
+      "velocity_rad_s": 9.95,
+      "stiffness": 6.91,
+      "damping": 0.258,
+      "armature": 0.0018,
+      "is_passive": false
+    },
+    {
+      "name": "head_pitch",
+      "parent_body": "neck",
+      "child_body": "neck_pitch",
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "lower_rad": -1.5707963267948966,
+      "upper_rad": 1.5707963267948966,
+      "effort_nm": 0.963,
+      "velocity_rad_s": 9.95,
+      "stiffness": 6.91,
+      "damping": 0.258,
+      "armature": 0.0018,
+      "is_passive": false
+    },
+    {
+      "name": "head_yaw",
+      "parent_body": "neck_pitch",
+      "child_body": "yaw_roll_motion",
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "lower_rad": -2.9670597283903613,
+      "upper_rad": 2.9670597283903595,
+      "effort_nm": 0.963,
+      "velocity_rad_s": 9.95,
+      "stiffness": 6.91,
+      "damping": 0.258,
+      "armature": 0.0018,
+      "is_passive": false
+    },
+    {
+      "name": "head_roll",
+      "parent_body": "yaw_roll_motion",
+      "child_body": "jaw_soft",
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "lower_rad": -0.43633231299858327,
+      "upper_rad": 0.4363323129985815,
+      "effort_nm": 0.963,
+      "velocity_rad_s": 9.95,
+      "stiffness": 6.91,
+      "damping": 0.258,
+      "armature": 0.0018,
+      "is_passive": false
+    },
+    {
+      "name": "right_hip_yaw",
+      "parent_body": "trunk_base",
+      "child_body": "bearing_roll",
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "lower_rad": -0.523598775598297,
+      "upper_rad": 0.43633231299858416,
+      "effort_nm": 0.963,
+      "velocity_rad_s": 9.95,
+      "stiffness": 6.91,
+      "damping": 0.258,
+      "armature": 0.0018,
+      "is_passive": false
+    },
+    {
+      "name": "right_hip_roll",
+      "parent_body": "bearing_roll",
+      "child_body": "hip_l_2",
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "lower_rad": -0.3839724354387507,
+      "upper_rad": 0.38397243543875426,
+      "effort_nm": 0.963,
+      "velocity_rad_s": 9.95,
+      "stiffness": 6.91,
+      "damping": 0.258,
+      "armature": 0.0018,
+      "is_passive": false
+    },
+    {
+      "name": "right_hip_pitch",
+      "parent_body": "hip_l_2",
+      "child_body": "upper_leg_right",
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "lower_rad": -1.57079632679494,
+      "upper_rad": 1.570796326794853,
+      "effort_nm": 0.963,
+      "velocity_rad_s": 9.95,
+      "stiffness": 6.91,
+      "damping": 0.258,
+      "armature": 0.0018,
+      "is_passive": false
+    },
+    {
+      "name": "right_knee",
+      "parent_body": "upper_leg_right",
+      "child_body": "leg_2",
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "lower_rad": -1.5707963267949339,
+      "upper_rad": 1.5707963267948593,
+      "effort_nm": 0.963,
+      "velocity_rad_s": 9.95,
+      "stiffness": 6.91,
+      "damping": 0.258,
+      "armature": 0.0018,
+      "is_passive": false
+    },
+    {
+      "name": "right_ankle",
+      "parent_body": "leg_2",
+      "child_body": "ankle_right",
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "lower_rad": -1.5707963267949028,
+      "upper_rad": 1.5707963267948903,
+      "effort_nm": 0.963,
+      "velocity_rad_s": 9.95,
+      "stiffness": 6.91,
+      "damping": 0.258,
+      "armature": 0.0018,
+      "is_passive": false
+    }
+  ]
+}

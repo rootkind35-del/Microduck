@@ -1,0 +1,132 @@
+{
+  "schema_version": "1.0.0",
+  "architect": "Argon Single-Model Sim-to-Real Pipeline",
+  "units": "meters",
+  "up_axis": "Z",
+  "presets": {
+    "nc_high_stairs_course": {
+      "description": "3-flight progressive staircase matching High Stairs RL Curriculum (2.0cm -> 2.75cm -> 3.5cm risers) with intermediate landings and summit platform.",
+      "corridor_width_m": 0.50,
+      "flights": [
+        {
+          "name": "flight_1_easy",
+          "start_x_m": 0.30,
+          "num_steps": 3,
+          "tread_depth_m": 0.12,
+          "riser_height_m": 0.010,
+          "landing_length_m": 0.36
+        },
+        {
+          "name": "flight_2_medium",
+          "start_x_m": 1.02,
+          "num_steps": 3,
+          "tread_depth_m": 0.12,
+          "riser_height_m": 0.0125,
+          "landing_length_m": 0.36
+        },
+        {
+          "name": "flight_3_high_35mm",
+          "start_x_m": 1.74,
+          "num_steps": 3,
+          "tread_depth_m": 0.12,
+          "riser_height_m": 0.015,
+          "landing_length_m": 0.48
+        }
+      ]
+    },
+    "step_over_hurdles": {
+      "description": "Parametric step-over obstacle bars for testing swing-foot clearance (3.5cm to 5.5cm) and GaitPhaseLatch transitions.",
+      "corridor_width_m": 0.50,
+      "hurdles": [
+        {"name": "hurdle_20mm", "x_m": 0.50, "thickness_m": 0.04, "height_m": 0.020},
+        {"name": "hurdle_30mm", "x_m": 1.00, "thickness_m": 0.04, "height_m": 0.030},
+        {"name": "hurdle_35mm", "x_m": 1.50, "thickness_m": 0.04, "height_m": 0.035}
+      ]
+    },
+    "microduck_beak_bumper_bracket": {
+      "description": "Parametric mechanical attachment (protective sensor/beak bumper bracket) for Microduck head/trunk.",
+      "outer_width_m": 0.056,
+      "outer_depth_m": 0.032,
+      "height_m": 0.014,
+      "wall_thickness_m": 0.003,
+      "mount_hole_spacing_m": 0.024
+    },
+    "vision_see_and_walk_course": {
+      "description": "Hermes 4-Zone Vision-Guided Rough Terrain & Progressive Staircase Course (3D Cobblestone Field + Slalom Pylons -> 3-Step Progressive Staircase [8mm, 16mm, 24mm] -> Summit Platform & Emerald Goal Beacon).",
+      "corridor_width_m": 0.50,
+      "primitives": [
+        {
+          "name": "cobble_1_entrance",
+          "center_xyz": [0.16, 0.0, 0.00125],
+          "extents_xyz": [0.050, 0.440, 0.0025],
+          "category": "rough_cobble",
+          "rgba": [0.55, 0.42, 0.30, 1.0]
+        },
+        {
+          "name": "cobble_2_ridge",
+          "center_xyz": [0.22, 0.0, 0.00225],
+          "extents_xyz": [0.060, 0.440, 0.0045],
+          "category": "rough_cobble",
+          "rgba": [0.68, 0.38, 0.24, 1.0]
+        },
+        {
+          "name": "cobble_3_high",
+          "center_xyz": [0.28, 0.0, 0.0030],
+          "extents_xyz": [0.060, 0.440, 0.0060],
+          "category": "rough_cobble",
+          "rgba": [0.62, 0.35, 0.22, 1.0]
+        },
+        {
+          "name": "cobble_4_exit",
+          "center_xyz": [0.34, 0.0, 0.0025],
+          "extents_xyz": [0.060, 0.440, 0.0050],
+          "category": "rough_cobble",
+          "rgba": [0.55, 0.42, 0.30, 1.0]
+        },
+        {
+          "name": "pylon_1_red_left",
+          "center_xyz": [0.22, 0.135, 0.055],
+          "extents_xyz": [0.036, 0.036, 0.110],
+          "category": "visual_pylon_red",
+          "rgba": [0.95, 0.15, 0.15, 1.0]
+        },
+        {
+          "name": "pylon_2_orange_right",
+          "center_xyz": [0.32, -0.135, 0.055],
+          "extents_xyz": [0.036, 0.036, 0.110],
+          "category": "visual_pylon_orange",
+          "rgba": [0.98, 0.52, 0.10, 1.0]
+        },
+        {
+          "name": "stair_1_yellow_step10mm",
+          "center_xyz": [0.46, 0.0, 0.0050],
+          "extents_xyz": [0.120, 0.500, 0.0100],
+          "category": "stair_step_yellow",
+          "rgba": [0.96, 0.84, 0.12, 1.0]
+        },
+        {
+          "name": "stair_2_gold_step20mm",
+          "center_xyz": [0.58, 0.0, 0.0100],
+          "extents_xyz": [0.120, 0.500, 0.0200],
+          "category": "stair_step_gold",
+          "rgba": [0.92, 0.68, 0.14, 1.0]
+        },
+        {
+          "name": "stair_3_summit_30mm",
+          "center_xyz": [0.78, 0.0, 0.0150],
+          "extents_xyz": [0.280, 0.500, 0.0300],
+          "category": "summit_platform_blue",
+          "rgba": [0.24, 0.52, 0.78, 1.0]
+        },
+        {
+          "name": "goal_5_beacon_green",
+          "center_xyz": [0.88, 0.0, 0.100],
+          "extents_xyz": [0.045, 0.090, 0.140],
+          "category": "visual_goal_green",
+          "rgba": [0.10, 0.92, 0.28, 1.0]
+        }
+      ]
+    }
+  }
+}
+

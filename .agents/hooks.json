@@ -1,0 +1,12 @@
+{
+  "project-memory-injector": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "python3 \"/home/dhp01/.gemini/config/skills/project-init/scripts/inject_memory.py\"",
+        "timeout": 5
+      }
+    ]
+  }
+}
+

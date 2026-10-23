@@ -61,17 +61,17 @@ STAIR_TILE_SIZE = (10.0, 10.0)  # 10 m x 10 m terrain patch
 STAIR_BORDER_WIDTH = 1.0        # 1.0 m border around staircase
 
 # Progressive curriculum stage boundaries (iterations)
-STAGE0_ITER = 0       # Flat ground & low obstacle transition (bootstrap flat walking)
-STAGE1_ITER = 1500    # 1.0 cm step focus (bootstrap stair gait)
-STAGE2_ITER = 2500    # 1.25 cm step focus (consolidate higher lift)
-STAGE3_ITER = 3500    # 1.5 cm step focus (maximum step riser clearance)
+STAGE0_ITER = 0       # Stage 0: bootstrap flat walking & initial clearance (3.5 cm)
+STAGE1_ITER = 1500    # Stage 1: bootstrap stair gait & low steps (4.5 cm)
+STAGE2_ITER = 3000    # Stage 2: consolidate higher lift & mid steps (5.0 cm)
+STAGE3_ITER = 4500    # Stage 3: maximum step riser clearance (5.5 cm)
 
-# Clearance target curriculum stages (matching riser height progression)
+# Clearance target curriculum stages (matching riser height progression across 6000 iters)
 CLEARANCE_TARGET_STAGES = [
-    {"step": 0, "target_height": 0.035},                                # bootstrap clearance (3.5 cm)
-    {"step": 200 * NUM_STEPS_PER_ENV, "target_height": 0.042},         # stage 1 clearance (4.2 cm)
-    {"step": 400 * NUM_STEPS_PER_ENV, "target_height": 0.050},         # stage 2 clearance (5.0 cm)
-    {"step": 600 * NUM_STEPS_PER_ENV, "target_height": 0.055},         # target high lift (5.5 cm)
+    {"step": STAGE0_ITER * NUM_STEPS_PER_ENV, "target_height": 0.035},  # bootstrap clearance (3.5 cm)
+    {"step": STAGE1_ITER * NUM_STEPS_PER_ENV, "target_height": 0.045},  # stage 1 clearance (4.5 cm)
+    {"step": STAGE2_ITER * NUM_STEPS_PER_ENV, "target_height": 0.050},  # stage 2 clearance (5.0 cm)
+    {"step": STAGE3_ITER * NUM_STEPS_PER_ENV, "target_height": 0.055},  # stage 3 target high lift (5.5 cm)
 ]
 
 # Action rate smoothing curriculum: enforce slow, smooth, deliberate leg motions
@@ -328,18 +328,6 @@ def make_microduck_stairs_env_cfg(
         cfg.rewards["track_linear_velocity"].weight = 3.5
         cfg.rewards["track_linear_velocity"].params["std"] = 0.12
 
-    # Double support stagnation penalty: penalize freezing in double-support when commanded forward
-    cfg.rewards["double_support_stagnation"] = RewardTermCfg(
-        func=microduck_mdp.double_support_stagnation_penalty,
-        weight=3.0,
-        params={
-            "sensor_name": "feet_ground_contact",
-            "contact_force_thresh": 2.0,
-            "command_name": "twist",
-            "cmd_threshold": 0.03,
-            "max_double_time_s": 0.30,
-        },
-    )
 
     # Heading lock: lock base heading straight ahead to prevent lateral spin and yaw instability
     if "heading_hold" in cfg.rewards:
@@ -497,7 +485,7 @@ def make_microduck_stairs_env_cfg(
             "contact_force_thresh": 2.0,
             "command_name": "twist",
             "cmd_threshold": 0.03,
-            "max_double_time_s": 0.40,
+            "max_double_time_s": 0.65,  # 0.65s (increased from 0.40s) allows full coronal pelvic sway transfer before leg lift
         },
     )
 
@@ -589,7 +577,7 @@ def make_microduck_stairs_env_cfg(
     # 19. Coronal Pelvic Sway (active lateral weight shift over stance foot for 3D LIPM balance)
     cfg.rewards["coronal_pelvic_sway"] = RewardTermCfg(
         func=microduck_mdp.coronal_pelvic_sway_reward,
-        weight=2.5,
+        weight=3.5,  # Increased to 3.5 to promote lateral weight transfer before swing initiation
         params={
             "sensor_name": "feet_ground_contact",
             "stance_force_thresh": 3.5,

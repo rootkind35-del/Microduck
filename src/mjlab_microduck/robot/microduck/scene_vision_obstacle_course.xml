@@ -1,0 +1,44 @@
+<mujoco model="microduck_vision_see_and_walk_scene">
+  <include file="robot_groundcontact.xml"/>
+
+  <statistic center="0.45 0 0.15" extent="1.4" meansize="0.05"/>
+
+  <visual>
+    <headlight diffuse="0.74 0.76 0.80" ambient="0.34 0.36 0.40" specular="0.35 0.35 0.40"/>
+    <quality shadowsize="4096" offsamples="4"/>
+    <map znear="0.01" zfar="25.0" force="0.1" fogstart="4.0" fogend="14.0"/>
+    <rgba haze="0.10 0.16 0.24 1"/>
+    <global azimuth="145" elevation="-22" offwidth="960" offheight="540"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.16 0.28 0.44" rgb2="0.03 0.05 0.10" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.18 0.22 0.28" rgb2="0.12 0.15 0.20" markrgb="0.42 0.52 0.64" width="512" height="512"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="6 6" reflectance="0.18" specular="0.30" shininess="0.5"/>
+    <material name="mat_rail_glow" rgba="0.14 0.80 0.98 0.88" emission="0.35" specular="0.6"/>
+    <material name="mat_arch_gold" rgba="0.96 0.78 0.18 0.92" emission="0.25" specular="0.7"/>
+  </asset>
+
+  <worldbody>
+    <light name="studio_key" pos="0.6 -0.8 2.2" dir="-0.20 0.35 -0.90" diffuse="0.82 0.80 0.76" specular="0.40 0.40 0.40" directional="true" castshadow="true"/>
+    <light name="studio_fill" pos="0.6 0.9 1.8" dir="-0.15 -0.40 -0.90" diffuse="0.38 0.44 0.54" specular="0.18 0.18 0.22" directional="true" castshadow="false"/>
+    <camera name="overview_track" pos="-0.26 -0.72 0.44" xyaxes="0.82 -0.57 0.0 0.24 0.35 0.90" fovy="50"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane" condim="3" contype="1" conaffinity="1"/>
+    <!-- Architectural LED Corridor Guide Rails & Summit Trophy Gate (Purely Visual Sites: 0 collision cost) -->
+    <site name="rail_left_led" type="box" pos="0.46 0.265 0.012" size="0.46 0.005 0.006" material="mat_rail_glow"/>
+    <site name="rail_right_led" type="box" pos="0.46 -0.265 0.012" size="0.46 0.005 0.006" material="mat_rail_glow"/>
+    <site name="summit_pillar_left" type="cylinder" pos="0.88 0.22 0.12" size="0.010 0.09" material="mat_arch_gold"/>
+    <site name="summit_pillar_right" type="cylinder" pos="0.88 -0.22 0.12" size="0.010 0.09" material="mat_arch_gold"/>
+    <site name="summit_arch_top" type="box" pos="0.88 0.0 0.21" size="0.012 0.24 0.010" material="mat_arch_gold"/>
+    <geom name="cobble_1_entrance" type="box" pos="0.16000 0.00000 0.00125" size="0.02500 0.22000 0.00125" rgba="0.550 0.420 0.300 1.000" condim="3" contype="1" conaffinity="1" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2"/>
+    <geom name="cobble_2_ridge" type="box" pos="0.22000 0.00000 0.00225" size="0.03000 0.22000 0.00225" rgba="0.680 0.380 0.240 1.000" condim="3" contype="1" conaffinity="1" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2"/>
+    <geom name="cobble_3_high" type="box" pos="0.28000 0.00000 0.00300" size="0.03000 0.22000 0.00300" rgba="0.620 0.350 0.220 1.000" condim="3" contype="1" conaffinity="1" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2"/>
+    <geom name="cobble_4_exit" type="box" pos="0.34000 0.00000 0.00250" size="0.03000 0.22000 0.00250" rgba="0.550 0.420 0.300 1.000" condim="3" contype="1" conaffinity="1" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2"/>
+    <geom name="pylon_1_red_left" type="box" pos="0.22000 0.13500 0.05500" size="0.01800 0.01800 0.05500" rgba="0.950 0.150 0.150 1.000" condim="3" contype="1" conaffinity="1" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2"/>
+    <geom name="pylon_2_orange_right" type="box" pos="0.32000 -0.13500 0.05500" size="0.01800 0.01800 0.05500" rgba="0.980 0.520 0.100 1.000" condim="3" contype="1" conaffinity="1" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2"/>
+    <geom name="stair_1_yellow_step10mm" type="box" pos="0.46000 0.00000 0.00500" size="0.06000 0.25000 0.00500" rgba="0.960 0.840 0.120 1.000" condim="3" contype="1" conaffinity="1" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2"/>
+    <geom name="stair_2_gold_step20mm" type="box" pos="0.58000 0.00000 0.01000" size="0.06000 0.25000 0.01000" rgba="0.920 0.680 0.140 1.000" condim="3" contype="1" conaffinity="1" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2"/>
+    <geom name="stair_3_summit_30mm" type="box" pos="0.78000 0.00000 0.01500" size="0.14000 0.25000 0.01500" rgba="0.240 0.520 0.780 1.000" condim="3" contype="1" conaffinity="1" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2"/>
+    <geom name="goal_5_beacon_green" type="box" pos="0.88000 0.00000 0.10000" size="0.02250 0.04500 0.07000" rgba="0.100 0.920 0.280 1.000" condim="3" contype="1" conaffinity="1" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2"/>
+  </worldbody>
+</mujoco>

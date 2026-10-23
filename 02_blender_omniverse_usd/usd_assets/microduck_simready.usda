@@ -1,0 +1,1064 @@
+#usda 1.0
+(
+    defaultPrim = "Microduck"
+    doc = "SimReady OpenUSD Articulation for Microduck Bipedal Robot (14 XL330 Servos, BAM M6)"
+    metersPerUnit = 1.0
+    upAxis = "Z"
+)
+
+def Xform "Microduck" (
+    prepend apiSchemas = ["PhysicsArticulationRootAPI"]
+)
+{
+    def PhysicsScene "PhysicsScene"
+    {
+        vector3f physics:gravityDirection = (0.0, 0.0, -1.0)
+        float physics:gravityMagnitude = 9.81
+    }
+
+    def Scope "Links"
+    {
+        def Xform "trunk_base" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            double3 xformOp:translate = (0.000000, 0.000000, 0.120000)
+            quatd xformOp:orient = (1.000000, 0.000000, 0.000000, 0.000000)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            bool physics:rigidBodyEnabled = true
+            float physics:mass = 0.199224
+            point3f physics:centerOfMass = (-0.022633, -0.000027, 0.002801)
+            float3 physics:diagonalInertia = (1.23975000e-04, 1.45931000e-04, 1.15351000e-04)
+            def Xform "trunk_base_visual_0"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration__22x16x4.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.006000, 0.017500, -0.005000)
+                quatd xformOp:orient = (1.000000, -0.000000, -0.000000, 0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "trunk_base_visual_1"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/right_shell.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.004000, -0.000500, -0.017500)
+                quatd xformOp:orient = (0.707107, 0.000000, 0.000000, 0.707107)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "trunk_base_visual_2"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/banana_pcb_locker.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.004200, 0.000000, -0.017521)
+                quatd xformOp:orient = (0.707107, -0.000000, 0.000000, 0.707107)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "trunk_base_visual_3"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/trunk_base.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.004000, -0.000000, -0.017500)
+                quatd xformOp:orient = (0.707107, -0.000000, -0.000000, 0.707107)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "trunk_base_visual_4"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/xl330.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.006000, 0.017500, 0.011500)
+                quatd xformOp:orient = (0.000000, -0.707107, 0.000000, -0.707107)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "trunk_base_visual_5"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/power_support.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.004000, -0.000000, -0.017521)
+                quatd xformOp:orient = (0.707107, -0.000000, -0.000000, 0.707107)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "trunk_base_self_collision_only_6"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/power_support.stl@
+                string info:purpose = "self_collision_only"
+                double3 xformOp:translate = (0.004000, -0.000000, -0.017521)
+                quatd xformOp:orient = (0.707107, -0.000000, -0.000000, 0.707107)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "trunk_base_visual_7"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/np_f970.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.035969, 0.000000, -0.003850)
+                quatd xformOp:orient = (0.006171, 0.707080, -0.707080, -0.006171)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "trunk_base_collision_8" (prepend apiSchemas = ["PhysicsCollisionAPI"])
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/np_f970.stl@
+                string info:purpose = "collision"
+                double3 xformOp:translate = (-0.035969, 0.000000, -0.003850)
+                quatd xformOp:orient = (0.006171, 0.707080, -0.707080, -0.006171)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "trunk_base_visual_9"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/xl330.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.006000, -0.017500, 0.011500)
+                quatd xformOp:orient = (0.000000, -0.707107, 0.000000, -0.707107)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "trunk_base_visual_10"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/left_shell.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.004000, -0.000000, -0.017579)
+                quatd xformOp:orient = (0.707107, -0.000000, -0.000000, 0.707107)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "trunk_base_visual_11"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration__22x16x4.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.006000, -0.017500, -0.005000)
+                quatd xformOp:orient = (1.000000, -0.000000, -0.000000, 0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+        def Xform "yaw2roll" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            double3 xformOp:translate = (0.006000, 0.017500, -0.005000)
+            quatd xformOp:orient = (0.000000, -0.707107, -0.707107, -0.000000)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            bool physics:rigidBodyEnabled = true
+            float physics:mass = 0.023041
+            point3f physics:centerOfMass = (-0.000000, 0.000994, 0.016892)
+            float3 physics:diagonalInertia = (4.19640000e-06, 3.41752000e-06, 2.32650000e-06)
+            def Xform "yaw2roll_visual_0"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/yaw2roll.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.017500, -0.002000, 0.012500)
+                quatd xformOp:orient = (0.000000, 1.000000, 0.000000, 0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "yaw2roll_visual_1"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/xl330.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.000000, -0.000000, 0.012500)
+                quatd xformOp:orient = (0.000000, -0.707107, 0.707107, -0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "yaw2roll_visual_2"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration__22x16x4.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.000000, 0.016500, 0.012500)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "yaw2roll_visual_3"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/bearing_roll.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.017500, -0.002000, 0.012500)
+                quatd xformOp:orient = (0.000000, -1.000000, -0.000000, -0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+        def Xform "hip_l" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            double3 xformOp:translate = (0.000000, 0.016500, 0.012500)
+            quatd xformOp:orient = (0.707107, -0.707107, 0.000000, -0.000000)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            bool physics:rigidBodyEnabled = true
+            float physics:mass = 0.006189
+            point3f physics:centerOfMass = (0.014815, 0.000000, -0.008300)
+            float3 physics:diagonalInertia = (8.60626000e-07, 1.15753000e-06, 6.51588000e-07)
+            def Xform "hip_l_visual_0"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration__22x16x4.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.021000, 0.000000, -0.018500)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "hip_l_visual_1"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/hip_l.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.017500, 0.000000, -0.018500)
+                quatd xformOp:orient = (0.707107, -0.707107, 0.000000, 0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "hip_l_collision_2" (prepend apiSchemas = ["PhysicsCollisionAPI"])
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/hip_l.stl@
+                string info:purpose = "collision"
+                double3 xformOp:translate = (-0.017500, 0.000000, -0.018500)
+                quatd xformOp:orient = (0.707107, -0.707107, 0.000000, 0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+        def Xform "upper_leg_left" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            double3 xformOp:translate = (0.025000, 0.000000, -0.018500)
+            quatd xformOp:orient = (0.500000, -0.500000, 0.500000, -0.500000)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            bool physics:rigidBodyEnabled = true
+            float physics:mass = 0.048207
+            point3f physics:centerOfMass = (0.006766, 0.022884, 0.013453)
+            float3 physics:diagonalInertia = (1.68753000e-05, 1.03691000e-05, 1.98269000e-05)
+            def Xform "upper_leg_left_visual_0"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/upper_leg_left.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.000000, -0.000000, -0.042500)
+                quatd xformOp:orient = (0.500000, -0.500000, -0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "upper_leg_left_visual_1"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/xl330.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.022000, 0.035777, 0.012500)
+                quatd xformOp:orient = (0.000000, 0.707107, 0.000000, 0.707107)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "upper_leg_left_visual_2"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/upper_leg_rigidity_plate.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.000000, 0.000000, -0.042500)
+                quatd xformOp:orient = (0.500000, -0.500000, -0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "upper_leg_left_visual_3"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration__22x16x4.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.022000, 0.035777, -0.004000)
+                quatd xformOp:orient = (0.000000, 0.000000, -0.000000, 1.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "upper_leg_left_visual_4"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/xl330.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.000000, -0.000000, 0.012500)
+                quatd xformOp:orient = (0.500000, 0.500000, -0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+        def Xform "leg" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            double3 xformOp:translate = (0.022000, 0.035777, -0.004000)
+            quatd xformOp:orient = (0.000000, 0.707107, 0.707107, 0.000000)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            bool physics:rigidBodyEnabled = true
+            float physics:mass = 0.021584
+            point3f physics:centerOfMass = (-0.000000, 0.031894, -0.009535)
+            float3 physics:diagonalInertia = (5.25056000e-06, 2.15507000e-06, 4.33925000e-06)
+            def Xform "leg_visual_0"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/leg.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.022000, 0.035777, 0.038500)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "leg_collision_1" (prepend apiSchemas = ["PhysicsCollisionAPI"])
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/leg.stl@
+                string info:purpose = "collision"
+                double3 xformOp:translate = (-0.022000, 0.035777, 0.038500)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "leg_visual_2"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/xl330.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.000000, 0.042000, -0.011500)
+                quatd xformOp:orient = (0.500000, -0.500000, -0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+        def Xform "ankle_left" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            double3 xformOp:translate = (-0.000000, 0.042000, -0.026000)
+            quatd xformOp:orient = (0.000000, -1.000000, -0.000000, 0.000000)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            bool physics:rigidBodyEnabled = true
+            float physics:mass = 0.030025
+            point3f physics:centerOfMass = (-0.006157, -0.013748, -0.015658)
+            float3 physics:diagonalInertia = (5.91525000e-06, 1.11534000e-05, 7.74016000e-06)
+            def Xform "ankle_left_visual_0"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/sole_left.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.022000, 0.006223, -0.064700)
+                quatd xformOp:orient = (0.500000, -0.500000, -0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "left_foot_collision" (prepend apiSchemas = ["PhysicsCollisionAPI"])
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/sole_left.stl@
+                string info:purpose = "collision"
+                double3 xformOp:translate = (-0.022000, 0.006223, -0.064700)
+                quatd xformOp:orient = (0.500000, -0.500000, -0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "ankle_left_visual_2"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/foot_left.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.022000, 0.006223, -0.064700)
+                quatd xformOp:orient = (0.500000, -0.500000, -0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "ankle_left_visual_3"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration_default.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.000000, 0.000000, -0.032200)
+                quatd xformOp:orient = (0.000000, 0.000000, 0.000000, 1.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "ankle_left_visual_4"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/ankle_left.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.022000, 0.006223, -0.064700)
+                quatd xformOp:orient = (0.500000, -0.500000, -0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+        def Xform "neck" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            double3 xformOp:translate = (0.026000, 0.014500, 0.032421)
+            quatd xformOp:orient = (0.000000, 0.000000, 0.707107, -0.707107)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            bool physics:rigidBodyEnabled = true
+            float physics:mass = 0.036841
+            point3f physics:centerOfMass = (-0.000000, -0.025000, 0.014167)
+            float3 physics:diagonalInertia = (1.72925000e-05, 3.12694000e-06, 1.63707000e-05)
+            def Xform "neck_visual_0"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/neck.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.022000, 0.050000, 0.028000)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "neck_visual_1"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/xl330.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.000000, 0.000000, 0.014500)
+                quatd xformOp:orient = (0.500000, -0.500000, -0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "neck_visual_2"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/xl330.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.000000, -0.050000, 0.014500)
+                quatd xformOp:orient = (0.500000, 0.500000, -0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "neck_visual_3"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/neck.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.022000, 0.050000, 0.003000)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+        def Xform "neck_pitch" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            double3 xformOp:translate = (-0.000000, -0.050000, 0.000000)
+            quatd xformOp:orient = (0.000000, 1.000000, -0.000000, -0.000000)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            bool physics:rigidBodyEnabled = true
+            float physics:mass = 0.005720
+            point3f physics:centerOfMass = (-0.000000, 0.011664, -0.014500)
+            float3 physics:diagonalInertia = (1.09186000e-06, 9.66855000e-07, 5.12111000e-07)
+            def Xform "neck_pitch_visual_0"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/neck_pitch.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.000000, 0.028793, -0.014500)
+                quatd xformOp:orient = (0.500000, -0.500000, -0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "neck_pitch_visual_1"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration__22x16x4.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.000000, 0.020793, -0.014500)
+                quatd xformOp:orient = (0.707107, 0.707107, -0.000000, 0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+        def Xform "yaw_roll_motion" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            double3 xformOp:translate = (-0.000000, 0.018693, -0.014500)
+            quatd xformOp:orient = (0.000000, -0.000000, -0.707107, -0.707107)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            bool physics:rigidBodyEnabled = true
+            float physics:mass = 0.048600
+            point3f physics:centerOfMass = (-0.000167, -0.005010, 0.017806)
+            float3 physics:diagonalInertia = (6.97903000e-06, 8.10293000e-06, 9.57884000e-06)
+            def Xform "yaw_roll_motion_visual_0"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/yaw_roll_motion.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.000000, 0.000000, 0.010000)
+                quatd xformOp:orient = (0.707107, 0.000000, 0.000000, 0.707107)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "yaw_roll_motion_visual_1"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/xl330.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.000000, 0.000000, 0.014500)
+                quatd xformOp:orient = (0.500000, -0.500000, -0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "yaw_roll_motion_visual_2"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration__22x16x4.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.016000, 0.000000, 0.014500)
+                quatd xformOp:orient = (0.707107, -0.000000, -0.707107, -0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "yaw_roll_motion_visual_3"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration__22x16x4.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.018000, 0.000000, 0.014500)
+                quatd xformOp:orient = (0.707107, 0.000000, -0.707107, -0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+        def Xform "jaw_soft" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            double3 xformOp:translate = (-0.017900, 0.000000, 0.014500)
+            quatd xformOp:orient = (0.707107, 0.000000, -0.707107, -0.000000)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            bool physics:rigidBodyEnabled = true
+            float physics:mass = 0.188766
+            point3f physics:centerOfMass = (0.004605, 0.001200, -0.032476)
+            float3 physics:diagonalInertia = (3.20811000e-04, 2.54100000e-04, 1.49882000e-04)
+            def Xform "jaw_soft_visual_0"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/lens.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.015500, -0.000091, -0.055480)
+                quatd xformOp:orient = (0.500000, -0.500000, 0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_visual_1"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/face_part.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.004500, -0.000091, -0.017800)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_visual_2"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/xl330.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.003000, 0.025500, -0.018000)
+                quatd xformOp:orient = (0.707107, 0.000000, -0.000000, -0.707107)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_visual_3"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/jaw_soft.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.004600, 0.000000, -0.018000)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_visual_4"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/motor_support.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.004500, -0.000000, -0.018000)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_visual_5"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/top_head_shell.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.004500, -0.000000, -0.018000)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_collision_6" (prepend apiSchemas = ["PhysicsCollisionAPI"])
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/top_head_shell.stl@
+                string info:purpose = "collision"
+                double3 xformOp:translate = (-0.004500, -0.000000, -0.018000)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_visual_7"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/xl330.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.000000, 0.000000, 0.014500)
+                quatd xformOp:orient = (0.500000, -0.500000, -0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_visual_8"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration_default.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.003200, -0.040000, -0.018000)
+                quatd xformOp:orient = (0.500000, -0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_visual_9"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/elec_rpi_robot_hat_pcb.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.026940, 0.028994, -0.051900)
+                quatd xformOp:orient = (0.707107, 0.000000, -0.000000, -0.707107)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_visual_10"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/soft_mouth_top.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.004201, 0.000000, -0.018081)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_visual_11"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/noenoeil.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.004500, -0.000091, -0.017800)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_visual_12"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/jaw.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.004500, -0.000000, -0.018000)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_collision_13" (prepend apiSchemas = ["PhysicsCollisionAPI"])
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/jaw.stl@
+                string info:purpose = "collision"
+                double3 xformOp:translate = (-0.004500, -0.000000, -0.018000)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_visual_14"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/bottom_head_shell.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.004300, -0.000000, -0.018000)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_collision_15" (prepend apiSchemas = ["PhysicsCollisionAPI"])
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/bottom_head_shell.stl@
+                string info:purpose = "collision"
+                double3 xformOp:translate = (-0.004300, -0.000000, -0.018000)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_visual_16"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/m12_lens_holder.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.015500, -0.000091, -0.055580)
+                quatd xformOp:orient = (0.500000, -0.500000, 0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_visual_17"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/pcb__raspberry_pi_zero_2_w.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.015435, -0.000011, -0.060010)
+                quatd xformOp:orient = (0.500000, -0.500000, -0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "jaw_soft_visual_18"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/speaker.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.010000, -0.016786, 0.026023)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+        def Xform "bearing_roll" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            double3 xformOp:translate = (0.006000, -0.017500, -0.005000)
+            quatd xformOp:orient = (0.000000, -0.707107, -0.707107, 0.000000)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            bool physics:rigidBodyEnabled = true
+            float physics:mass = 0.023041
+            point3f physics:centerOfMass = (-0.000000, 0.000994, 0.016892)
+            float3 physics:diagonalInertia = (4.19640000e-06, 3.41752000e-06, 2.32650000e-06)
+            def Xform "bearing_roll_visual_0"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/yaw2roll.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.017500, -0.002000, 0.012500)
+                quatd xformOp:orient = (0.000000, 1.000000, 0.000000, 0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "bearing_roll_visual_1"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/xl330.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.000000, -0.000000, 0.012500)
+                quatd xformOp:orient = (0.000000, -0.707107, 0.707107, 0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "bearing_roll_visual_2"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/bearing_roll.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.017500, -0.002000, 0.012500)
+                quatd xformOp:orient = (0.000000, 1.000000, 0.000000, 0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "bearing_roll_visual_3"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration__22x16x4.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.000000, 0.016500, 0.012500)
+                quatd xformOp:orient = (0.500000, 0.500000, 0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+        def Xform "hip_l_2" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            double3 xformOp:translate = (-0.000000, 0.016500, 0.012500)
+            quatd xformOp:orient = (0.000000, 0.000000, 0.707107, 0.707107)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            bool physics:rigidBodyEnabled = true
+            float physics:mass = 0.006189
+            point3f physics:centerOfMass = (0.014815, 0.000000, -0.008300)
+            float3 physics:diagonalInertia = (8.60626000e-07, 1.15753000e-06, 6.51588000e-07)
+            def Xform "hip_l_2_visual_0"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/hip_l.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.017500, 0.000000, -0.018500)
+                quatd xformOp:orient = (0.707107, -0.707107, -0.000000, -0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "hip_l_2_collision_1" (prepend apiSchemas = ["PhysicsCollisionAPI"])
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/hip_l.stl@
+                string info:purpose = "collision"
+                double3 xformOp:translate = (-0.017500, 0.000000, -0.018500)
+                quatd xformOp:orient = (0.707107, -0.707107, -0.000000, -0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "hip_l_2_visual_2"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration__22x16x4.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.025000, 0.000000, -0.018500)
+                quatd xformOp:orient = (0.500000, 0.500000, -0.500000, -0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+        def Xform "upper_leg_right" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            double3 xformOp:translate = (0.025000, 0.000000, -0.018500)
+            quatd xformOp:orient = (0.500000, -0.500000, 0.500000, -0.500000)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            bool physics:rigidBodyEnabled = true
+            float physics:mass = 0.048207
+            point3f physics:centerOfMass = (-0.006766, 0.022884, 0.013453)
+            float3 physics:diagonalInertia = (1.68753000e-05, 1.03691000e-05, 1.98269000e-05)
+            def Xform "upper_leg_right_visual_0"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/xl330.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.022000, 0.035777, 0.012500)
+                quatd xformOp:orient = (0.707107, -0.000000, -0.707107, -0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "upper_leg_right_visual_1"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration__22x16x4.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.022000, 0.035777, 0.000000)
+                quatd xformOp:orient = (0.000000, 1.000000, -0.000000, -0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "upper_leg_right_visual_2"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/upper_leg_rigidity_plate.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.000000, -0.000000, 0.043500)
+                quatd xformOp:orient = (0.500000, -0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "upper_leg_right_visual_3"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/upper_leg_right.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.000000, -0.000000, -0.042500)
+                quatd xformOp:orient = (0.500000, -0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "upper_leg_right_visual_4"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/xl330.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.000000, -0.000000, 0.012500)
+                quatd xformOp:orient = (0.500000, 0.500000, -0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+        def Xform "leg_2" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            double3 xformOp:translate = (-0.022000, 0.035777, -0.004000)
+            quatd xformOp:orient = (0.000000, 1.000000, -0.000000, -0.000000)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            bool physics:rigidBodyEnabled = true
+            float physics:mass = 0.021584
+            point3f physics:centerOfMass = (-0.031894, -0.000000, -0.009535)
+            float3 physics:diagonalInertia = (2.15507000e-06, 5.25056000e-06, 4.33925000e-06)
+            def Xform "leg_2_visual_0"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/xl330.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.042000, 0.000000, -0.011500)
+                quatd xformOp:orient = (0.707107, -0.000000, -0.707107, -0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "leg_2_visual_1"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/leg.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (-0.035777, -0.022000, 0.038500)
+                quatd xformOp:orient = (0.707107, 0.000000, 0.707107, -0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "leg_2_collision_2" (prepend apiSchemas = ["PhysicsCollisionAPI"])
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/leg.stl@
+                string info:purpose = "collision"
+                double3 xformOp:translate = (-0.035777, -0.022000, 0.038500)
+                quatd xformOp:orient = (0.707107, 0.000000, 0.707107, -0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+        def Xform "ankle_right" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            double3 xformOp:translate = (-0.042000, 0.000000, -0.026000)
+            quatd xformOp:orient = (0.000000, -0.707107, -0.707107, 0.000000)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            bool physics:rigidBodyEnabled = true
+            float physics:mass = 0.030025
+            point3f physics:centerOfMass = (0.006155, -0.013748, -0.015657)
+            float3 physics:diagonalInertia = (5.91534000e-06, 1.11534000e-05, 7.74015000e-06)
+            def Xform "ankle_right_visual_0"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/ankle_right.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.022000, 0.006223, -0.064700)
+                quatd xformOp:orient = (0.500000, -0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "ankle_right_visual_1"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/sole_right.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.022000, 0.006223, -0.064700)
+                quatd xformOp:orient = (0.500000, -0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "right_foot_collision" (prepend apiSchemas = ["PhysicsCollisionAPI"])
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/sole_right.stl@
+                string info:purpose = "collision"
+                double3 xformOp:translate = (0.022000, 0.006223, -0.064700)
+                quatd xformOp:orient = (0.500000, -0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "ankle_right_visual_3"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration_default.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.000000, -0.000000, -0.029200)
+                quatd xformOp:orient = (0.000000, -1.000000, -0.000000, -0.000000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+            def Xform "ankle_right_visual_4"
+            {
+                asset info:meshAsset = @../../src/mjlab_microduck/robot/microduck/assets/foot_right.stl@
+                string info:purpose = "visual"
+                double3 xformOp:translate = (0.022000, 0.006223, -0.064700)
+                quatd xformOp:orient = (0.500000, -0.500000, 0.500000, 0.500000)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+    }
+
+    def Scope "Joints"
+    {
+        def PhysicsRevoluteJoint "left_hip_yaw" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </Microduck/Links/trunk_base>
+            rel physics:body1 = </Microduck/Links/yaw2roll>
+            float physics:lowerLimit = -25.0000
+            float physics:upperLimit = 30.0000
+            float physics:armature = 0.001800
+            uniform token drive:angular:physics:type = "force"
+            float drive:angular:physics:maxForce = 0.9630
+            float drive:angular:physics:stiffness = 6.9100
+            float drive:angular:physics:damping = 0.2580
+        }
+        def PhysicsRevoluteJoint "left_hip_roll" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </Microduck/Links/yaw2roll>
+            rel physics:body1 = </Microduck/Links/hip_l>
+            float physics:lowerLimit = -22.0000
+            float physics:upperLimit = 22.0000
+            float physics:armature = 0.001800
+            uniform token drive:angular:physics:type = "force"
+            float drive:angular:physics:maxForce = 0.9630
+            float drive:angular:physics:stiffness = 6.9100
+            float drive:angular:physics:damping = 0.2580
+        }
+        def PhysicsRevoluteJoint "left_hip_pitch" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </Microduck/Links/hip_l>
+            rel physics:body1 = </Microduck/Links/upper_leg_left>
+            float physics:lowerLimit = -90.0000
+            float physics:upperLimit = 90.0000
+            float physics:armature = 0.001800
+            uniform token drive:angular:physics:type = "force"
+            float drive:angular:physics:maxForce = 0.9630
+            float drive:angular:physics:stiffness = 6.9100
+            float drive:angular:physics:damping = 0.2580
+        }
+        def PhysicsRevoluteJoint "left_knee" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </Microduck/Links/upper_leg_left>
+            rel physics:body1 = </Microduck/Links/leg>
+            float physics:lowerLimit = -90.0000
+            float physics:upperLimit = 90.0000
+            float physics:armature = 0.001800
+            uniform token drive:angular:physics:type = "force"
+            float drive:angular:physics:maxForce = 0.9630
+            float drive:angular:physics:stiffness = 6.9100
+            float drive:angular:physics:damping = 0.2580
+        }
+        def PhysicsRevoluteJoint "left_ankle" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </Microduck/Links/leg>
+            rel physics:body1 = </Microduck/Links/ankle_left>
+            float physics:lowerLimit = -90.0000
+            float physics:upperLimit = 90.0000
+            float physics:armature = 0.001800
+            uniform token drive:angular:physics:type = "force"
+            float drive:angular:physics:maxForce = 0.9630
+            float drive:angular:physics:stiffness = 6.9100
+            float drive:angular:physics:damping = 0.2580
+        }
+        def PhysicsRevoluteJoint "neck_pitch" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </Microduck/Links/trunk_base>
+            rel physics:body1 = </Microduck/Links/neck>
+            float physics:lowerLimit = -90.0000
+            float physics:upperLimit = 60.0000
+            float physics:armature = 0.001800
+            uniform token drive:angular:physics:type = "force"
+            float drive:angular:physics:maxForce = 0.9630
+            float drive:angular:physics:stiffness = 6.9100
+            float drive:angular:physics:damping = 0.2580
+        }
+        def PhysicsRevoluteJoint "head_pitch" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </Microduck/Links/neck>
+            rel physics:body1 = </Microduck/Links/neck_pitch>
+            float physics:lowerLimit = -90.0000
+            float physics:upperLimit = 90.0000
+            float physics:armature = 0.001800
+            uniform token drive:angular:physics:type = "force"
+            float drive:angular:physics:maxForce = 0.9630
+            float drive:angular:physics:stiffness = 6.9100
+            float drive:angular:physics:damping = 0.2580
+        }
+        def PhysicsRevoluteJoint "head_yaw" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </Microduck/Links/neck_pitch>
+            rel physics:body1 = </Microduck/Links/yaw_roll_motion>
+            float physics:lowerLimit = -170.0000
+            float physics:upperLimit = 170.0000
+            float physics:armature = 0.001800
+            uniform token drive:angular:physics:type = "force"
+            float drive:angular:physics:maxForce = 0.9630
+            float drive:angular:physics:stiffness = 6.9100
+            float drive:angular:physics:damping = 0.2580
+        }
+        def PhysicsRevoluteJoint "head_roll" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </Microduck/Links/yaw_roll_motion>
+            rel physics:body1 = </Microduck/Links/jaw_soft>
+            float physics:lowerLimit = -25.0000
+            float physics:upperLimit = 25.0000
+            float physics:armature = 0.001800
+            uniform token drive:angular:physics:type = "force"
+            float drive:angular:physics:maxForce = 0.9630
+            float drive:angular:physics:stiffness = 6.9100
+            float drive:angular:physics:damping = 0.2580
+        }
+        def PhysicsRevoluteJoint "right_hip_yaw" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </Microduck/Links/trunk_base>
+            rel physics:body1 = </Microduck/Links/bearing_roll>
+            float physics:lowerLimit = -30.0000
+            float physics:upperLimit = 25.0000
+            float physics:armature = 0.001800
+            uniform token drive:angular:physics:type = "force"
+            float drive:angular:physics:maxForce = 0.9630
+            float drive:angular:physics:stiffness = 6.9100
+            float drive:angular:physics:damping = 0.2580
+        }
+        def PhysicsRevoluteJoint "right_hip_roll" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </Microduck/Links/bearing_roll>
+            rel physics:body1 = </Microduck/Links/hip_l_2>
+            float physics:lowerLimit = -22.0000
+            float physics:upperLimit = 22.0000
+            float physics:armature = 0.001800
+            uniform token drive:angular:physics:type = "force"
+            float drive:angular:physics:maxForce = 0.9630
+            float drive:angular:physics:stiffness = 6.9100
+            float drive:angular:physics:damping = 0.2580
+        }
+        def PhysicsRevoluteJoint "right_hip_pitch" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </Microduck/Links/hip_l_2>
+            rel physics:body1 = </Microduck/Links/upper_leg_right>
+            float physics:lowerLimit = -90.0000
+            float physics:upperLimit = 90.0000
+            float physics:armature = 0.001800
+            uniform token drive:angular:physics:type = "force"
+            float drive:angular:physics:maxForce = 0.9630
+            float drive:angular:physics:stiffness = 6.9100
+            float drive:angular:physics:damping = 0.2580
+        }
+        def PhysicsRevoluteJoint "right_knee" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </Microduck/Links/upper_leg_right>
+            rel physics:body1 = </Microduck/Links/leg_2>
+            float physics:lowerLimit = -90.0000
+            float physics:upperLimit = 90.0000
+            float physics:armature = 0.001800
+            uniform token drive:angular:physics:type = "force"
+            float drive:angular:physics:maxForce = 0.9630
+            float drive:angular:physics:stiffness = 6.9100
+            float drive:angular:physics:damping = 0.2580
+        }
+        def PhysicsRevoluteJoint "right_ankle" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </Microduck/Links/leg_2>
+            rel physics:body1 = </Microduck/Links/ankle_right>
+            float physics:lowerLimit = -90.0000
+            float physics:upperLimit = 90.0000
+            float physics:armature = 0.001800
+            uniform token drive:angular:physics:type = "force"
+            float drive:angular:physics:maxForce = 0.9630
+            float drive:angular:physics:stiffness = 6.9100
+            float drive:angular:physics:damping = 0.2580
+        }
+    }
+}

@@ -156,77 +156,118 @@ DEFAULT_POSE = np.array([
 
 
 class TerminalInput:
-    """Single-keypress reader on stdin (cbreak mode, background thread).
+    """Single-keypress reader on stdin and /dev/tty (cbreak mode, background thread).
 
-    Replaces the MuJoCo viewer key_callback: keypresses in the viewer window
-    also fire the viewer's built-in visualization shortcuts (frames, labels,
-    rendering toggles…), so commands are read from the terminal instead.
-    Arrow keys arrive as ESC [ A/B/C/D escape sequences and are translated to
-    symbolic names ("up"/"down"/"left"/"right"); letters are lowercased.
-    cbreak (not raw) mode keeps ISIG enabled, so Ctrl+C still works.
+    Reads from BOTH sys.stdin (if TTY) and /dev/tty directly so keyboard control
+    works reliably even when launched via `uv run` or wrapper shells, as well as
+    receiving keys forwarded from the MuJoCo 3D viewer window `key_callback`.
     """
 
     _ARROWS = {"A": "up", "B": "down", "C": "right", "D": "left"}
+    _VN_MAP = {
+        "ư": "w", "ứ": "w", "ừ": "w", "ử": "w", "ữ": "w", "ự": "w",
+        "ă": "a", "ắ": "a", "ằ": "a", "ẳ": "a", "ẵ": "a", "ặ": "a",
+        "â": "a", "ấ": "a", "ầ": "a", "ẩ": "a", "ẫ": "a", "ậ": "a",
+        "á": "a", "à": "a", "ả": "a", "ã": "a", "ạ": "a",
+        "đ": "d",
+        "ê": "e", "ế": "e", "ề": "e", "ể": "e", "ễ": "e", "ệ": "e",
+        "é": "e", "è": "e", "ẻ": "e", "ẽ": "e", "ẹ": "e",
+        "ô": "o", "ố": "o", "ồ": "o", "ổ": "o", "ỗ": "o", "ộ": "o",
+        "ơ": "o", "ớ": "o", "ờ": "o", "ở": "o", "ỡ": "o", "ợ": "o",
+        "ó": "o", "ò": "o", "ỏ": "o", "õ": "o", "ọ": "o",
+    }
 
     def __init__(self):
         self._queue = queue.Queue()
-        self.enabled = sys.stdin.isatty()
-        self._fd = sys.stdin.fileno() if self.enabled else -1
-        self._old_attrs = None
+        self._fds = []
+        self._tty_fd = None
+        self._old_attrs = {}
+        self.enabled = False
         self._stop = threading.Event()
 
     def __enter__(self):
-        if not self.enabled:
-            print("WARNING: stdin is not a TTY — keyboard control disabled")
-            return self
-        self._old_attrs = termios.tcgetattr(self._fd)
-        # Custom cbreak: disable ICANON and ECHO, but keep ISIG so Ctrl+C works instantly
-        new_attrs = termios.tcgetattr(self._fd)
-        new_attrs[3] = new_attrs[3] & ~(termios.ICANON | termios.ECHO)
-        new_attrs[6][termios.VMIN] = 0
-        new_attrs[6][termios.VTIME] = 0
-        termios.tcsetattr(self._fd, termios.TCSANOW, new_attrs)
-        threading.Thread(target=self._reader, daemon=True).start()
+        if sys.stdin is not None and sys.stdin.isatty():
+            try:
+                self._fds.append(sys.stdin.fileno())
+            except Exception:
+                pass
+        try:
+            tty_fd = os.open("/dev/tty", os.O_RDONLY | os.O_NONBLOCK)
+            if not self._fds or not os.path.sameopenfile(tty_fd, self._fds[0]):
+                self._tty_fd = tty_fd
+                self._fds.append(tty_fd)
+            else:
+                os.close(tty_fd)
+        except Exception:
+            pass
+
+        for fd in list(self._fds):
+            try:
+                self._old_attrs[fd] = termios.tcgetattr(fd)
+                new_attrs = termios.tcgetattr(fd)
+                new_attrs[3] = new_attrs[3] & ~(termios.ICANON | termios.ECHO)
+                new_attrs[6][termios.VMIN] = 1
+                new_attrs[6][termios.VTIME] = 0
+                termios.tcsetattr(fd, termios.TCSANOW, new_attrs)
+                self.enabled = True
+            except Exception:
+                pass
+
+        if self.enabled:
+            threading.Thread(target=self._reader, daemon=True).start()
         return self
 
     def __exit__(self, *exc):
         self._stop.set()
-        if self._old_attrs is not None:
-            termios.tcsetattr(self._fd, termios.TCSADRAIN, self._old_attrs)
+        for fd, attrs in self._old_attrs.items():
+            try:
+                termios.tcsetattr(fd, termios.TCSADRAIN, attrs)
+            except Exception:
+                pass
+        if self._tty_fd is not None:
+            try:
+                os.close(self._tty_fd)
+            except Exception:
+                pass
 
     def _reader(self):
         while not self._stop.is_set():
-            r, _, _ = select.select([self._fd], [], [], 0.02)
-            if not r or self._stop.is_set():
-                continue
             try:
-                data = os.read(self._fd, 128)
-            except (OSError, ValueError):
-                continue
-            if not data:
-                continue
-            text = data.decode(errors="ignore")
-            i = 0
-            n = len(text)
-            while i < n:
-                if text[i] == "\x1b":
-                    # Check for arrow key sequence: \x1b[A, \x1b[B, \x1b[C, \x1b[D or \x1bOA...
-                    if i + 2 < n and text[i+1] in ("[", "O") and text[i+2] in self._ARROWS:
-                        self._queue.put(self._ARROWS[text[i+2]])
-                        i += 3
-                    elif i + 1 < n and text[i+1] == "\x1b":
-                        i += 1  # double ESC
-                    else:
-                        i += 1  # stray ESC
-                else:
-                    ch = text[i]
-                    if ch.isalpha():
-                        self._queue.put(ch.lower())
-                    elif ch in (" ", "\n", "\r"):
-                        self._queue.put(" ")
-                    else:
-                        self._queue.put(ch)
-                    i += 1
+                r, _, _ = select.select(self._fds, [], [], 0.02)
+                if not r or self._stop.is_set():
+                    continue
+                for fd in r:
+                    try:
+                        data = os.read(fd, 128)
+                    except (OSError, ValueError):
+                        continue
+                    if not data:
+                        continue
+                    text = data.decode("utf-8", errors="ignore")
+                    i = 0
+                    n = len(text)
+                    while i < n:
+                        if text[i] == "\x1b":
+                            if i + 2 < n and text[i+1] in ("[", "O") and text[i+2] in self._ARROWS:
+                                self._queue.put(self._ARROWS[text[i+2]])
+                                i += 3
+                            elif i + 1 < n and text[i+1] == "\x1b":
+                                i += 1
+                            else:
+                                i += 1
+                        elif text[i] in ("\x7f", "\x08"):
+                            self._queue.put("backspace")
+                            i += 1
+                        else:
+                            ch = text[i].lower()
+                            ch = self._VN_MAP.get(ch, ch)
+                            if ch in (" ", "\n", "\r"):
+                                self._queue.put(" ")
+                            else:
+                                self._queue.put(ch)
+                            i += 1
+            except Exception:
+                break
 
     def put_key(self, key):
         """Enqueue a key from another source (e.g. viewer key_callback)."""
@@ -242,7 +283,6 @@ class TerminalInput:
                 break
         if not keys:
             return keys
-        # If queue was flooded with repeated arrow keys, collapse to latest
         collapsed = []
         for k in keys:
             if not collapsed or k != collapsed[-1] or k not in ("up", "down", "left", "right"):
@@ -457,6 +497,14 @@ class PolicyInference:
         self.input_name = self.ort_session.get_inputs()[0].name
         self.output_name = self.ort_session.get_outputs()[0].name
 
+        # Auto-detect 61D unified observation layout from the active ONNX model
+        try:
+            active_in_shape = self.ort_session.get_inputs()[0].shape
+            if len(active_in_shape) >= 2 and active_in_shape[1] == 61 and not self.new_cmd_obs:
+                self.new_cmd_obs = True
+        except Exception:
+            pass
+
         # Get sensor IDs and body IDs
         self.imu_ang_vel_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SENSOR, "imu_ang_vel")
         self.trunk_base_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "trunk_base")
@@ -540,8 +588,8 @@ class PolicyInference:
 
         # Velocity command [lin_vel_x, lin_vel_y, ang_vel_z] — controls walking / policy switching
         self.vel_cmd = np.zeros(3, dtype=np.float32)
-        # Closed-loop Heading-Lock & Adaptive Terrain Locomotion (ON by default for laser-straight walking)
-        self.heading_lock_enabled = True
+        # Closed-loop Heading-Lock & Adaptive Terrain Locomotion (toggled via 'H' key or API)
+        self.heading_lock_enabled = False
         self.target_yaw = None
         self.heading_kp = 2.2
         self.auto_slowdown_enabled = False
@@ -2110,8 +2158,8 @@ def main():
                         help="Path to stairs policy (e.g. stairs_climb.onnx)")
     parser.add_argument("--auto-toss", action="store_true",
                         help="Automatically toss the ball at t=0.5s to demonstrate the full Autonomous Fetch pipeline")
-    parser.add_argument("--hud", action="store_true",
-                        help="Display the in-viewer PiP camera HUD in top-right corner (off by default for maximum FPS)")
+    parser.add_argument("--hud", action=argparse.BooleanOptionalAction, default=True,
+                        help="Display the embedded PiP Robot Eye Camera HUD in top-right corner of the viewer (default: True)")
     parser.add_argument("--focus", action=argparse.BooleanOptionalAction, default=True,
                         help="Smoothly track and focus camera lookat on the robot as it moves (default: True, disable with --no-focus)")
     parser.add_argument("--goal-x", type=float, default=2.5,
@@ -2274,11 +2322,14 @@ def main():
         policy.vel_min_y = 0.0
         policy.vel_max_ang = 1.0      # ±1.0 rad heading error
     else:
-        policy.vel_max_x = 0.10
-        policy.vel_min_x = -0.08
-        policy.vel_max_y = 0.08
-        policy.vel_min_y = -0.08
-        policy.vel_max_ang = 0.40
+        policy.vel_max_x = 0.28
+        policy.vel_min_x = -0.20
+        policy.vel_max_y = 0.15
+        policy.vel_min_y = -0.15
+        policy.vel_max_ang = 0.70
+        policy.vel_step_x = 0.04
+        policy.vel_step_y = 0.04
+        policy.vel_step_ang = 0.18
 
     # Set initial position to default pose
     freejoint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "trunk_base_freejoint")
@@ -2420,37 +2471,52 @@ def main():
     focus_camera = getattr(args, "focus", True)
     nav_to_goal = getattr(args, "navigate", False)
     nav_speed = float(getattr(args, "nav_speed", 0.08))
+    show_pip_hud = getattr(args, "hud", True)
+    last_key_info = "NONE"
     goal_overlay = GoalNavigationOverlay(model, policy, goal_x=args.goal_x, goal_y=args.goal_y)
 
-    def handle_key(key):
-        nonlocal policy_enabled, quit_requested, focus_camera, nav_to_goal, nav_speed
-        # Map common Vietnamese IME (Unikey/EVKey) characters to standard controls
-        _VN_MAP = {"ư": "w", "đ": "d", "â": "a", "ă": "a", "s": "s"}
-        key = _VN_MAP.get(key, key)
-        try:
-            if key in ("up", "down", "left", "right", "a", "e", "w", "s", "d", " "):
+    def reset_robot_to_spawn():
+        data.qpos[qpos_adr + 0] = spawn_x
+        data.qpos[qpos_adr + 1] = spawn_y
+        data.qpos[qpos_adr + 2] = spawn_z if spawn_z is not None else default_z
+        data.qpos[qpos_adr + 3:qpos_adr + 7] = [1, 0, 0, 0]
+        data.qvel[:] = 0.0
+        for idx_j, qpos_idx in enumerate(policy.joint_qpos_indices):
+            data.qpos[qpos_idx] = policy.default_pose[idx_j]
+        if bam_ctrl is not None:
+            bam_ctrl.reset(data.qpos)
+        policy.set_position_targets(policy.default_pose)
+        policy.set_vel_cmd(0.0, 0.0, 0.0, verbose=False)
+        mujoco.mj_forward(model, data)
+        print("🔄 [RESET] Đã đưa robot về lại vị trí xuất phát ban đầu!")
 
+    def handle_key(key):
+        nonlocal policy_enabled, quit_requested, focus_camera, nav_to_goal, nav_speed, show_pip_hud, last_key_info
+        _VN_MAP = {"ư": "w", "đ": "d", "â": "a", "ă": "a", "s": "s", "ô": "o", "ơ": "o", "ê": "e"}
+        key = _VN_MAP.get(key, key)
+        last_key_info = key.upper()
+        try:
+            if key in ("up", "down", "left", "right", "a", "e", "w", "s", "d", "i", " ", "backspace", "0"):
                 if nav_to_goal:
                     nav_to_goal = False
-                    print("[Manual Control] Bàn phím can thiệp -> Tắt chế độ tự đi đến mục tiêu (bấm N để bật lại)")
+                    print("🎮 [Manual Control] Bàn phím can thiệp -> Tắt chế độ tự đi đến mục tiêu (bấm N để bật lại)")
 
                 if policy.fetch_mode and not policy.head_mode and not policy.body_pose_mode:
                     policy.fetch_mode = False
                     policy.head_offset[:] = 0.0
                     policy._update_command()
-                    print("[Manual Control] Bàn phím can thiệp -> Tắt Auto-Fetch, trao toàn quyền điều khiển cho người dùng (bấm F để bật lại)")
+                    print("🎮 [Manual Control] Bàn phím can thiệp -> Tắt Auto-Fetch, trao toàn quyền điều khiển (bấm F để bật lại)")
 
-            if key in ("up", "w"):
-                if policy.head_mode:
-                    if key == "up":
-                        policy.head_offset[1] = np.clip(policy.head_offset[1] + policy.head_step, -policy.head_max, policy.head_max)
-                        policy._update_command()
-                        print(f"Head offset: neck={policy.head_offset[0]:.2f} pitch={policy.head_offset[1]:.2f} yaw={policy.head_offset[2]:.2f} roll={policy.head_offset[3]:.2f}")
-                elif policy.body_pose_mode:
-                    if key == "up":
-                        policy.bump_body("z", policy.body_cmd_step_z)
+            if key in ("up", "w", "i"):
+                if policy.head_mode and key == "up":
+                    policy.head_offset[1] = np.clip(policy.head_offset[1] + policy.head_step, -policy.head_max, policy.head_max)
+                    policy._update_command()
+                    print(f"Head offset: neck={policy.head_offset[0]:.2f} pitch={policy.head_offset[1]:.2f} yaw={policy.head_offset[2]:.2f} roll={policy.head_offset[3]:.2f}")
+                elif policy.body_pose_mode and key == "up":
+                    policy.bump_body("z", policy.body_cmd_step_z)
                 else:
-                    policy.set_vel_cmd(policy.vel_max_x, 0.0, 0.0)
+                    new_vx = 0.10 if policy.nominal_vel_x < 0.06 else float(np.clip(policy.nominal_vel_x + policy.vel_step_x, policy.vel_min_x, policy.vel_max_x))
+                    policy.set_vel_cmd(new_vx, policy.nominal_vel_y, policy.nominal_vel_ang)
             elif key == "down":
                 if policy.head_mode:
                     policy.head_offset[1] = np.clip(policy.head_offset[1] - policy.head_step, -policy.head_max, policy.head_max)
@@ -2459,7 +2525,8 @@ def main():
                 elif policy.body_pose_mode:
                     policy.bump_body("z", -policy.body_cmd_step_z)
                 else:
-                    policy.set_vel_cmd(policy.vel_min_x, 0.0, 0.0)
+                    new_vx = -0.08 if (0.0 <= policy.nominal_vel_x <= 0.04) else float(np.clip(policy.nominal_vel_x - 0.05, policy.vel_min_x, policy.vel_max_x))
+                    policy.set_vel_cmd(new_vx, policy.nominal_vel_y, policy.nominal_vel_ang)
             elif key == "right":
                 if policy.head_mode:
                     policy.head_offset[2] = np.clip(policy.head_offset[2] - policy.head_step, -policy.head_max, policy.head_max)
@@ -2467,11 +2534,10 @@ def main():
                     print(f"Head offset: neck={policy.head_offset[0]:.2f} pitch={policy.head_offset[1]:.2f} yaw={policy.head_offset[2]:.2f} roll={policy.head_offset[3]:.2f}")
                 elif policy.body_pose_mode:
                     policy.bump_body("pitch", -policy.body_cmd_step_angle)
-                elif args.roller:
-                    new_ang = np.clip(policy.nominal_vel_ang - policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang)
-                    policy.set_vel_cmd(policy.nominal_vel_x, 0.0, new_ang)
                 else:
-                    policy.set_vel_cmd(policy.nominal_vel_x, -policy.vel_step_y, 0.0)
+                    cur_vx = 0.08 if abs(policy.nominal_vel_x) < 0.04 and not args.roller else policy.nominal_vel_x
+                    new_ang = float(np.clip(policy.nominal_vel_ang - policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang))
+                    policy.set_vel_cmd(cur_vx, policy.nominal_vel_y, new_ang)
             elif key == "left":
                 if policy.head_mode:
                     policy.head_offset[2] = np.clip(policy.head_offset[2] + policy.head_step, -policy.head_max, policy.head_max)
@@ -2479,18 +2545,15 @@ def main():
                     print(f"Head offset: neck={policy.head_offset[0]:.2f} pitch={policy.head_offset[1]:.2f} yaw={policy.head_offset[2]:.2f} roll={policy.head_offset[3]:.2f}")
                 elif policy.body_pose_mode:
                     policy.bump_body("pitch", policy.body_cmd_step_angle)
-                elif args.roller:
-                    new_ang = np.clip(policy.nominal_vel_ang + policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang)
-                    policy.set_vel_cmd(policy.nominal_vel_x, 0.0, new_ang)
                 else:
-                    policy.set_vel_cmd(policy.nominal_vel_x, policy.vel_step_y, 0.0)
+                    cur_vx = 0.08 if abs(policy.nominal_vel_x) < 0.04 and not args.roller else policy.nominal_vel_x
+                    new_ang = float(np.clip(policy.nominal_vel_ang + policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang))
+                    policy.set_vel_cmd(cur_vx, policy.nominal_vel_y, new_ang)
             elif key == "d":
                 if not policy.head_mode and not policy.body_pose_mode:
-                    if args.roller:
-                        new_ang = np.clip(policy.nominal_vel_ang - policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang)
-                        policy.set_vel_cmd(policy.nominal_vel_x, 0.0, new_ang)
-                    else:
-                        policy.set_vel_cmd(policy.nominal_vel_x, 0.0, -policy.vel_max_ang)
+                    cur_vx = 0.08 if abs(policy.nominal_vel_x) < 0.04 and not args.roller else policy.nominal_vel_x
+                    new_ang = float(np.clip(policy.nominal_vel_ang - policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang))
+                    policy.set_vel_cmd(cur_vx, policy.nominal_vel_y, new_ang)
             elif key == " ":
                 if policy.head_mode:
                     policy.head_offset[:] = 0.0
@@ -2502,10 +2565,10 @@ def main():
                     print("Body pose cmd reset to zero")
                 else:
                     policy.set_vel_cmd(0.0, 0.0, 0.0)
+                    print("🛑 [DỪNG] Đã đưa vận tốc về 0 (Robot đứng giữ thăng bằng)")
+            elif key in ("backspace", "0"):
+                reset_robot_to_spawn()
             elif key == "t":
-                # Toggle policy inference on/off. When OFF the controller stops
-                # querying the ONNX policy and the motors hold the last applied
-                # target (no fresh ctrl writes).
                 policy_enabled = not policy_enabled
                 print(f"Policy inference: {'ON' if policy_enabled else 'OFF (paused)'}")
             elif key == "f":
@@ -2518,7 +2581,6 @@ def main():
                     rot = _quat2mat(policy.data.xquat[policy.trunk_base_id])
                     ball_pos = policy.data.qpos[policy.ball_qpos_adr:policy.ball_qpos_adr + 2]
                     rel_b = rot[:2, :2].T @ (ball_pos - robot_pos)
-                    # Check if ball is already precisely at the feet (sweet spot)
                     if 0.065 <= rel_b[0] <= 0.115 and abs(rel_b[1]) <= 0.035:
                         policy.trigger_ground_pick()
                     else:
@@ -2527,9 +2589,18 @@ def main():
                 else:
                     policy.trigger_ground_pick()
             elif key == "k":
-                policy.trigger_behavior("kick_left")
+                if policy.behavior_sessions.get("kick_left") is not None:
+                    policy.trigger_behavior("kick_left")
+                else:
+                    new_vx = -0.08 if (0.0 <= policy.nominal_vel_x <= 0.04) else float(np.clip(policy.nominal_vel_x - 0.05, policy.vel_min_x, policy.vel_max_x))
+                    policy.set_vel_cmd(new_vx, policy.nominal_vel_y, policy.nominal_vel_ang)
             elif key == "l":
-                policy.trigger_behavior("kick_right")
+                if policy.behavior_sessions.get("kick_right") is not None:
+                    policy.trigger_behavior("kick_right")
+                else:
+                    cur_vx = 0.08 if abs(policy.nominal_vel_x) < 0.04 and not args.roller else policy.nominal_vel_x
+                    new_ang = float(np.clip(policy.nominal_vel_ang - policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang))
+                    policy.set_vel_cmd(cur_vx, policy.nominal_vel_y, new_ang)
             elif key == "r":
                 policy.trigger_behavior("roulade")
             elif key == "u":
@@ -2538,7 +2609,6 @@ def main():
                 quit_requested = True
                 print("Quit requested")
             elif key == "y":
-                # Y toggles whichever aux policy is loaded (--sit or --slope).
                 if policy.sit_session is not None:
                     policy.toggle_sit()
                 else:
@@ -2557,7 +2627,9 @@ def main():
                 elif policy.body_pose_mode:
                     policy.bump_body("roll", policy.body_cmd_step_angle)
                 else:
-                    policy.set_vel_cmd(policy.nominal_vel_x, 0.0, policy.vel_max_ang)
+                    cur_vx = 0.08 if abs(policy.nominal_vel_x) < 0.04 and not args.roller else policy.nominal_vel_x
+                    new_ang = float(np.clip(policy.nominal_vel_ang + policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang))
+                    policy.set_vel_cmd(cur_vx, policy.nominal_vel_y, new_ang)
             elif key == "e":
                 if policy.head_mode:
                     policy.head_offset[3] = np.clip(policy.head_offset[3] - policy.head_step, -policy.head_max, policy.head_max)
@@ -2566,7 +2638,8 @@ def main():
                 elif policy.body_pose_mode:
                     policy.bump_body("roll", -policy.body_cmd_step_angle)
                 else:
-                    policy.set_vel_cmd(policy.nominal_vel_x, 0.0, -policy.vel_max_ang)
+                    new_vy = float(np.clip(policy.nominal_vel_y - policy.vel_step_y, policy.vel_min_y, policy.vel_max_y))
+                    policy.set_vel_cmd(policy.nominal_vel_x, new_vy, policy.nominal_vel_ang)
             elif key == "z":
                 if policy.head_mode:
                     policy.head_offset[0] = np.clip(policy.head_offset[0] + policy.head_step, -policy.head_max, policy.head_max)
@@ -2574,6 +2647,9 @@ def main():
                     print(f"Head offset: neck={policy.head_offset[0]:.2f} pitch={policy.head_offset[1]:.2f} yaw={policy.head_offset[2]:.2f} roll={policy.head_offset[3]:.2f}")
                 elif policy.body_pose_mode and policy.new_cmd_obs:
                     policy.bump_body("yaw", policy.body_cmd_step_angle)
+                else:
+                    new_vy = float(np.clip(policy.nominal_vel_y + policy.vel_step_y, policy.vel_min_y, policy.vel_max_y))
+                    policy.set_vel_cmd(policy.nominal_vel_x, new_vy, policy.nominal_vel_ang)
             elif key == "s":
                 if policy.head_mode:
                     policy.head_offset[0] = np.clip(policy.head_offset[0] - policy.head_step, -policy.head_max, policy.head_max)
@@ -2582,13 +2658,20 @@ def main():
                 elif policy.body_pose_mode and policy.new_cmd_obs:
                     policy.bump_body("yaw", -policy.body_cmd_step_angle)
                 else:
-                    policy.set_vel_cmd(policy.vel_min_x, 0.0, 0.0)
+                    new_vx = -0.08 if (0.0 <= policy.nominal_vel_x <= 0.04) else float(np.clip(policy.nominal_vel_x - 0.05, policy.vel_min_x, policy.vel_max_x))
+                    policy.set_vel_cmd(new_vx, policy.nominal_vel_y, policy.nominal_vel_ang)
             elif key == "j":
-                policy.toggle_stairs_mode()
+                if policy.stairs_session is not None and policy.walking_session is not None:
+                    policy.toggle_stairs_mode()
+                else:
+                    cur_vx = 0.08 if abs(policy.nominal_vel_x) < 0.04 and not args.roller else policy.nominal_vel_x
+                    new_ang = float(np.clip(policy.nominal_vel_ang + policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang))
+                    policy.set_vel_cmd(cur_vx, policy.nominal_vel_y, new_ang)
             elif key == "c":
                 policy.toggle_heading_lock()
             elif key == "v":
-                policy.toggle_auto_slowdown()
+                show_pip_hud = not show_pip_hud
+                print(f"📷 [PiP CAMERA] Khung camera mắt robot góc trên phải: {'BẬT (ON)' if show_pip_hud else 'TẮT (OFF)'}")
             elif key == "o":
                 focus_camera = not focus_camera
                 print(f"Camera Auto-Focus: {'ON (Tracking robot)' if focus_camera else 'OFF (Free camera)'}")
@@ -2625,59 +2708,42 @@ def main():
                     policy.set_vel_cmd(policy.vel_max_x, policy.nominal_vel_y, policy.nominal_vel_ang)
                 print(f"\n🐢 [GIẢM TỐC] Đã giảm tốc độ bước đi xuống: {nav_speed:.2f} m/s")
             elif key in ("+", "="):
-                nav_speed = min(0.18, round(nav_speed + 0.02, 2))
-                policy.vel_max_x = min(0.18, round(policy.vel_max_x + 0.02, 2))
+                nav_speed = min(0.28, round(nav_speed + 0.02, 2))
+                policy.vel_max_x = min(0.28, round(policy.vel_max_x + 0.02, 2))
                 if policy.nominal_vel_x > 0.01:
                     policy.set_vel_cmd(policy.vel_max_x, policy.nominal_vel_y, policy.nominal_vel_ang)
                 print(f"\n⚡ [TĂNG TỐC] Đã tăng tốc độ bước đi lên: {nav_speed:.2f} m/s")
         except Exception as e:
             print(f"Key press error: {e}")
 
-    print("\nKeyboard controls (type in THIS terminal — the viewer window no longer captures keys):")
+    print("\nKeyboard controls (work in BOTH Terminal and 3D Viewer Window):")
     print("  [ Velocity mode (default) ]")
-    print("  UP arrow / W:     walk forward straight [lin_vel_x, 0, 0]")
-    print("  DOWN arrow / S:   walk backward straight [lin_vel_x, 0, 0]")
-    if args.roller:
-        print("  LEFT/RIGHT arrow: turn left/right (ang_vel_z heading error)")
-        print("  A / D (or E):     turn left/right (ang_vel_z, incremental)")
-    else:
-        print("  LEFT/RIGHT arrow: strafe left/right (lin_vel_y)")
-        print("  A / D (or E):     turn left/right (ang_vel_z)")
-    print("  SPACE:            stop / coast (zero all commands)")
+    print("  UP arrow / W / I: walk forward / speed up (+0.04 m/s)")
+    print("  DOWN arrow / S:   slow down / walk backward (-0.05 m/s)")
+    print("  LEFT arrow / A:   turn left (+0.18 rad/s)")
+    print("  RIGHT arrow / D:  turn right (-0.18 rad/s)")
+    print("  Z / E:            strafe sideways left / right (+/-0.04 m/s)")
+    print("  SPACE:            stop / stand balance (zero all commands)")
+    print("  BACKSPACE / 0:    reset robot to starting position")
+    print("  V:                bật/tắt khung Camera nhỏ (PiP Robot Eye Camera) góc trên phải")
     print("  N:                bật/tắt chế độ tự đi đến mục tiêu (Autonomous Goal Navigation)")
     print("  M:                chuyển sang Waypoint mục tiêu tiếp theo")
     print("  [ / ]:            dời mục tiêu gần hơn / xa hơn (trục X ±0.5m)")
     print("  , / .:            dời mục tiêu sang trái / phải (trục Y ±0.25m)")
-    print("  - / _:            giảm tốc độ bước đi (-0.02 m/s, min 0.04 m/s)")
-    print("  + / =:            tăng tốc độ bước đi (+0.02 m/s, max 0.18 m/s)")
-    print("  J:                toggle Stairs Climbing mode (switch to/from --stairs policy)")
+    print("  - / _:            giảm tốc độ bước đi (-0.02 m/s)")
+    print("  + / =:            tăng tốc độ bước đi (+0.02 m/s)")
     print("  C:                toggle Heading-Lock (giữ tuyệt đối hướng đi thẳng/lùi)")
-    print("  V:                toggle Terrain-Adaptive Auto-Slowdown (tự giảm tốc khi gặp gồ ghề)")
     print("  O:                toggle Camera Auto-Focus/Tracking on/off (camera tự dõi theo robot)")
     print("  T:                toggle policy inference on/off (paused = motors hold last target)")
     print("  F:                Auto-Fetch: ném bóng vào sân và robot tự chạy tới gắp về (bấm F lần nữa để dừng)")
     print("  X:                Chỉ ném bóng vào sân (toss ball): robot đứng yên đợi cho tới khi bấm F")
     print("  G:                Ground pick (tự chạy tới gắp nếu bóng ở xa, cúi gắp nếu bóng ở chân)")
     print("  Y:                toggle sit (with --sit/--sitstand) or slope mode (with --slope)")
-    print("  K:                kick with LEFT foot (requires --kick-left)")
-    print("  L:                kick with RIGHT foot (requires --kick-right)")
+    print("  K / L:            kick with LEFT / RIGHT foot (or slow/turn if kick not loaded)")
     print("  R:                roulade / forward roll (requires --roulade)")
     print("  U:                trigger stand up (requires --standup)")
     print(f"  P:                random push (trunk vel = {PUSH_MAX:.1f} m/s in random direction)")
     print("  Q:                quit")
-    print("  [ Body pose mode — press B to toggle ]")
-    print(f"  UP/DOWN arrow:    Δz ±10mm  (max ±{BODY_CMD_MAX_Z*1000:.0f}mm)")
-    print(f"  LEFT/RIGHT arrow: Δpitch ±10°  (max ±{math.degrees(BODY_CMD_MAX_ANGLE):.0f}°)")
-    print(f"  A / E:            Δroll ±10°  (max ±{math.degrees(BODY_CMD_MAX_ANGLE):.0f}°)")
-    if args.new_cmd_obs:
-        print(f"  Z / S:            Δyaw ±10°  (new_cmd_obs only, max ±{math.degrees(BODY_CMD_MAX_ANGLE):.0f}°)")
-    print("  SPACE:            reset body pose to zero")
-    print("  [ Head mode — press H to toggle ]")
-    print("  Z / S:            neck_pitch ±step")
-    print("  UP/DOWN arrow:    head_pitch ±step")
-    print("  LEFT/RIGHT arrow: head_yaw ±step")
-    print("  A / E:            head_roll ±step")
-    print("  SPACE:            reset head offset to zero")
 
     term = TerminalInput()
 
@@ -2687,6 +2753,10 @@ def main():
             263: "left",
             264: "down",
             265: "up",
+            259: "backspace",
+            261: "backspace",
+            257: "up",
+            335: "up",
             32: " ",
         }
         if keycode in _KEY_MAP:
@@ -2722,8 +2792,15 @@ def main():
         render_cam.elevation = -22.0
         render_cam.azimuth = 138.0
         frame_interval = max(1, int(round(1.0 / (control_dt * args.record_fps))))
-    head_renderer = mujoco.Renderer(model, height=135, width=190) if (record_frames is not None and policy.ball_qpos_adr is not None) else None
-    pip_cam = mujoco.MjvCamera() if head_renderer is not None else None
+    need_pip_renderer = (record_frames is not None) or (not args.headless)
+    head_renderer = None
+    pip_cam = None
+    if need_pip_renderer:
+        try:
+            head_renderer = mujoco.Renderer(model, height=160, width=240)
+            pip_cam = mujoco.MjvCamera()
+        except Exception as e:
+            print(f"[PiP Camera] Offscreen renderer unavailable ({e})")
 
     viewer_ctx = _HeadlessViewer() if args.headless else mujoco.viewer.launch_passive(
         model, data, show_left_ui=False, show_right_ui=False, key_callback=viewer_key_callback)
@@ -3069,6 +3146,61 @@ def main():
                     viewer.cam.lookat[1] = robot_y
                     viewer.cam.lookat[2] = robot_z + 0.05
 
+                # Live in-viewer Picture-in-Picture (PiP) Robot Eye Camera
+                if not args.headless and viewer is not None and hasattr(viewer, "set_images"):
+                    if show_pip_hud and head_renderer is not None and pip_cam is not None:
+                        if control_step_count % 3 == 1:
+                            try:
+                                head_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "jaw_soft")
+                                if head_bid < 0:
+                                    head_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "head_assembly")
+                                if head_bid >= 0:
+                                    head_pos = data.xpos[head_bid]
+                                    head_rot = data.xmat[head_bid].reshape(3, 3)
+                                    head_fwd = -head_rot[:, 2]
+                                    head_up = head_rot[:, 0]
+                                    cam_pos = head_pos + head_fwd * 0.08 + head_up * 0.015
+                                    head_yaw_deg = math.degrees(math.atan2(head_fwd[1], head_fwd[0]))
+                                    gaze_target = cam_pos + head_fwd * 0.60 - head_up * 0.20
+                                else:
+                                    robot_pos = data.qpos[qpos_adr:qpos_adr + 3]
+                                    cam_pos = robot_pos + np.array([0.08, 0, 0.25])
+                                    head_yaw_deg = 0.0
+                                    gaze_target = cam_pos + np.array([0.60, 0, -0.20])
+
+                                pip_cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+                                pip_cam.lookat = [float(gaze_target[0]), float(gaze_target[1]), float(gaze_target[2])]
+                                pip_cam.distance = 0.58
+                                pip_cam.elevation = -20.0
+                                pip_cam.azimuth = head_yaw_deg
+                                head_renderer.update_scene(data, pip_cam)
+                                pip_rgb = head_renderer.render().copy()
+                                ph, pw, _ = pip_rgb.shape
+                                ch, cw = ph // 2, pw // 2
+                                # Center crosshair
+                                pip_rgb[ch - 1:ch + 1, cw - 12:cw - 3] = (0, 255, 220)
+                                pip_rgb[ch - 1:ch + 1, cw + 3:cw + 12] = (0, 255, 220)
+                                pip_rgb[ch - 12:ch - 3, cw - 1:cw + 1] = (0, 255, 220)
+                                pip_rgb[ch + 3:ch + 12, cw - 1:cw + 1] = (0, 255, 220)
+                                # Cyan border
+                                pip_rgb[:2, :] = (40, 200, 255)
+                                pip_rgb[-2:, :] = (40, 200, 255)
+                                pip_rgb[:, :2] = (40, 200, 255)
+                                pip_rgb[:, -2:] = (40, 200, 255)
+                                vp = getattr(viewer, "viewport", None)
+                                vp_w = int(vp.width) if (vp is not None and getattr(vp, "width", 0) > 0) else 1280
+                                vp_h = int(vp.height) if (vp is not None and getattr(vp, "height", 0) > 0) else 720
+                                pip_rect = mujoco.MjrRect(max(12, vp_w - pw - 16), max(12, vp_h - ph - 16), pw, ph)
+                                viewer.set_images([(pip_rect, pip_rgb)])
+                            except Exception:
+                                pass
+                    else:
+                        if control_step_count % 10 == 0:
+                            try:
+                                viewer.clear_images()
+                            except Exception:
+                                pass
+
                 t_sync_0 = time.perf_counter()
                 viewer.sync()
                 sync_durations.append(time.perf_counter() - t_sync_0)
@@ -3091,9 +3223,9 @@ def main():
 
                     # Render native zero-overhead HUD text directly inside MuJoCo viewer
                     if viewer is not None and hasattr(viewer, "set_texts"):
-                        hud_l = f"FPS: {measured_fps:4.1f} Hz  (step: {avg_step_ms:3.1f}ms)\nSim: {avg_sim_ms:3.1f}ms  Sync: {avg_sync_ms:3.1f}ms"
+                        hud_l = f"FPS: {measured_fps:4.1f} Hz  (step: {avg_step_ms:3.1f}ms)\nSim: {avg_sim_ms:3.1f}ms  Sync: {avg_sync_ms:3.1f}ms\nKey: [{last_key_info}]"
                         st_name = f"FETCH: {policy.fetch_state}" if policy.fetch_mode else f"MODE: {policy.current_policy.upper()}"
-                        hud_r = f"{st_name}\nCmd: [{policy.vel_cmd[0]:+.2f}, {policy.vel_cmd[1]:+.2f}, {policy.vel_cmd[2]:+.2f}]"
+                        hud_r = f"{st_name}\nCmd: [{policy.vel_cmd[0]:+.2f}, {policy.vel_cmd[1]:+.2f}, {policy.vel_cmd[2]:+.2f}]\nPiP Eye Cam [V]: {'ON' if show_pip_hud else 'OFF'}"
                         try:
                             viewer.set_texts([
                                 (mujoco.mjtFontScale.mjFONTSCALE_100, mujoco.mjtGridPos.mjGRID_TOPLEFT, hud_l, hud_r)

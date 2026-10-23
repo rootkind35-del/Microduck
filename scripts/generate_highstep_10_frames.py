@@ -37,7 +37,7 @@ from scripts.infer_stairs import (
 )
 
 ARTIFACT_DIR = Path("/home/dhp01/.gemini/antigravity/brain/a21b19a9-726d-4110-aa09-6c8ad3dd61d8")
-POLICY_PATH = PROJECT_ROOT / "test_750.onnx"
+POLICY_PATH = PROJECT_ROOT / "highstep_walking.onnx"
 SCENE_XML = PROJECT_ROOT / "src/mjlab_microduck/robot/microduck/scene.xml"
 
 

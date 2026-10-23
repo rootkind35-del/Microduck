@@ -1,0 +1,1033 @@
+{
+  "executed_at": "2026-10-23T09:31:21.175534+00:00",
+  "requested_stage": "all",
+  "environment": {
+    "python_executable": "/home/dhp01/microduck_rl/.venv/bin/python",
+    "python_version": "3.12.14",
+    "binaries": {
+      "uv": "/home/dhp01/.local/bin/uv",
+      "freecadcmd": null,
+      "blender": null
+    },
+    "packages": {
+      "torch": "2.9.1+cu128",
+      "warp": "1.12.0",
+      "mujoco": "3.10.0",
+      "mjlab": "installed",
+      "trimesh": "4.11.1",
+      "scipy": "1.18.0",
+      "onnx": "1.22.0",
+      "onnxruntime": "1.24.4",
+      "pxr": null,
+      "isaaclab": null
+    }
+  },
+  "stages": {
+    "stage_a_cad": {
+      "stage": "Stage A - FreeCAD / Argon Parametric CAD",
+      "generated_at": "2026-10-23T09:31:21.232191+00:00",
+      "units": "meters",
+      "up_axis": "Z",
+      "backend": {
+        "freecadcmd_binary": null,
+        "freecad_python_module": false,
+        "active_engine": "argon_csg_step_trimesh"
+      },
+      "models": {
+        "nc_high_stairs_course": {
+          "description": "3-flight progressive staircase matching High Stairs RL Curriculum (2.0cm -> 2.75cm -> 3.5cm risers) with intermediate landings and summit platform.",
+          "num_primitives": 12,
+          "num_vertices": 96,
+          "num_faces": 144,
+          "is_watertight": true,
+          "volume_m3": 0.0756,
+          "bounds_min_xyz_m": [
+            0.3,
+            -0.25,
+            0.0
+          ],
+          "bounds_max_xyz_m": [
+            2.58,
+            0.25,
+            0.1125
+          ],
+          "step_engine": "argon_iso10303_ap214",
+          "files": {
+            "step": "/home/dhp01/microduck_rl/01_freecad_cad/exports/nc_high_stairs_course.step",
+            "stl": "/home/dhp01/microduck_rl/01_freecad_cad/exports/nc_high_stairs_course.stl",
+            "obj": "/home/dhp01/microduck_rl/01_freecad_cad/exports/nc_high_stairs_course.obj"
+          },
+          "primitives": [
+            {
+              "name": "stair_1_1",
+              "center_xyz": [
+                0.36,
+                0.0,
+                0.005
+              ],
+              "extents_xyz": [
+                0.12,
+                0.5,
+                0.01
+              ],
+              "category": "stair_step",
+              "rgba": [
+                0.32,
+                0.48,
+                0.65,
+                1.0
+              ]
+            },
+            {
+              "name": "stair_1_2",
+              "center_xyz": [
+                0.48,
+                0.0,
+                0.01
+              ],
+              "extents_xyz": [
+                0.12,
+                0.5,
+                0.02
+              ],
+              "category": "stair_step",
+              "rgba": [
+                0.32,
+                0.48,
+                0.65,
+                1.0
+              ]
+            },
+            {
+              "name": "stair_1_3",
+              "center_xyz": [
+                0.6,
+                0.0,
+                0.015
+              ],
+              "extents_xyz": [
+                0.12,
+                0.5,
+                0.03
+              ],
+              "category": "stair_step",
+              "rgba": [
+                0.32,
+                0.48,
+                0.65,
+                1.0
+              ]
+            },
+            {
+              "name": "landing_1",
+              "center_xyz": [
+                0.84,
+                0.0,
+                0.015
+              ],
+              "extents_xyz": [
+                0.36,
+                0.5,
+                0.03
+              ],
+              "category": "landing_platform",
+              "rgba": [
+                0.22,
+                0.62,
+                0.42,
+                1.0
+              ]
+            },
+            {
+              "name": "stair_2_1",
+              "center_xyz": [
+                1.08,
+                0.0,
+                0.02125
+              ],
+              "extents_xyz": [
+                0.12,
+                0.5,
+                0.0425
+              ],
+              "category": "stair_step",
+              "rgba": [
+                0.68,
+                0.52,
+                0.26,
+                1.0
+              ]
+            },
+            {
+              "name": "stair_2_2",
+              "center_xyz": [
+                1.2,
+                0.0,
+                0.0275
+              ],
+              "extents_xyz": [
+                0.12,
+                0.5,
+                0.055
+              ],
+              "category": "stair_step",
+              "rgba": [
+                0.68,
+                0.52,
+                0.26,
+                1.0
+              ]
+            },
+            {
+              "name": "stair_2_3",
+              "center_xyz": [
+                1.32,
+                0.0,
+                0.03375
+              ],
+              "extents_xyz": [
+                0.12,
+                0.5,
+                0.0675
+              ],
+              "category": "stair_step",
+              "rgba": [
+                0.68,
+                0.52,
+                0.26,
+                1.0
+              ]
+            },
+            {
+              "name": "landing_2",
+              "center_xyz": [
+                1.56,
+                0.0,
+                0.03375
+              ],
+              "extents_xyz": [
+                0.36,
+                0.5,
+                0.0675
+              ],
+              "category": "landing_platform",
+              "rgba": [
+                0.22,
+                0.62,
+                0.42,
+                1.0
+              ]
+            },
+            {
+              "name": "stair_3_1",
+              "center_xyz": [
+                1.8,
+                0.0,
+                0.04125
+              ],
+              "extents_xyz": [
+                0.12,
+                0.5,
+                0.0825
+              ],
+              "category": "stair_step",
+              "rgba": [
+                0.78,
+                0.34,
+                0.26,
+                1.0
+              ]
+            },
+            {
+              "name": "stair_3_2",
+              "center_xyz": [
+                1.92,
+                0.0,
+                0.04875
+              ],
+              "extents_xyz": [
+                0.12,
+                0.5,
+                0.0975
+              ],
+              "category": "stair_step",
+              "rgba": [
+                0.78,
+                0.34,
+                0.26,
+                1.0
+              ]
+            },
+            {
+              "name": "stair_3_3",
+              "center_xyz": [
+                2.04,
+                0.0,
+                0.05625
+              ],
+              "extents_xyz": [
+                0.12,
+                0.5,
+                0.1125
+              ],
+              "category": "stair_step",
+              "rgba": [
+                0.78,
+                0.34,
+                0.26,
+                1.0
+              ]
+            },
+            {
+              "name": "landing_3",
+              "center_xyz": [
+                2.34,
+                0.0,
+                0.05625
+              ],
+              "extents_xyz": [
+                0.48,
+                0.5,
+                0.1125
+              ],
+              "category": "landing_platform",
+              "rgba": [
+                0.22,
+                0.62,
+                0.42,
+                1.0
+              ]
+            }
+          ]
+        },
+        "step_over_hurdles": {
+          "description": "Parametric step-over obstacle bars for testing swing-foot clearance (3.5cm to 5.5cm) and GaitPhaseLatch transitions.",
+          "num_primitives": 3,
+          "num_vertices": 24,
+          "num_faces": 36,
+          "is_watertight": true,
+          "volume_m3": 0.0017,
+          "bounds_min_xyz_m": [
+            0.48,
+            -0.25,
+            0.0
+          ],
+          "bounds_max_xyz_m": [
+            1.52,
+            0.25,
+            0.035
+          ],
+          "step_engine": "argon_iso10303_ap214",
+          "files": {
+            "step": "/home/dhp01/microduck_rl/01_freecad_cad/exports/step_over_hurdles.step",
+            "stl": "/home/dhp01/microduck_rl/01_freecad_cad/exports/step_over_hurdles.stl",
+            "obj": "/home/dhp01/microduck_rl/01_freecad_cad/exports/step_over_hurdles.obj"
+          },
+          "primitives": [
+            {
+              "name": "hurdle_20mm",
+              "center_xyz": [
+                0.5,
+                0.0,
+                0.01
+              ],
+              "extents_xyz": [
+                0.04,
+                0.5,
+                0.02
+              ],
+              "category": "hurdle_obstacle",
+              "rgba": [
+                0.82,
+                0.42,
+                0.18,
+                1.0
+              ]
+            },
+            {
+              "name": "hurdle_30mm",
+              "center_xyz": [
+                1.0,
+                0.0,
+                0.015
+              ],
+              "extents_xyz": [
+                0.04,
+                0.5,
+                0.03
+              ],
+              "category": "hurdle_obstacle",
+              "rgba": [
+                0.82,
+                0.42,
+                0.18,
+                1.0
+              ]
+            },
+            {
+              "name": "hurdle_35mm",
+              "center_xyz": [
+                1.5,
+                0.0,
+                0.0175
+              ],
+              "extents_xyz": [
+                0.04,
+                0.5,
+                0.035
+              ],
+              "category": "hurdle_obstacle",
+              "rgba": [
+                0.82,
+                0.42,
+                0.18,
+                1.0
+              ]
+            }
+          ]
+        },
+        "microduck_beak_bumper_bracket": {
+          "description": "Parametric mechanical attachment (protective sensor/beak bumper bracket) for Microduck head/trunk.",
+          "num_primitives": 3,
+          "num_vertices": 24,
+          "num_faces": 36,
+          "is_watertight": true,
+          "volume_m3": 5e-06,
+          "bounds_min_xyz_m": [
+            -0.016,
+            -0.028,
+            0.0
+          ],
+          "bounds_max_xyz_m": [
+            0.016,
+            0.028,
+            0.014
+          ],
+          "step_engine": "argon_iso10303_ap214",
+          "files": {
+            "step": "/home/dhp01/microduck_rl/01_freecad_cad/exports/microduck_beak_bumper_bracket.step",
+            "stl": "/home/dhp01/microduck_rl/01_freecad_cad/exports/microduck_beak_bumper_bracket.stl",
+            "obj": "/home/dhp01/microduck_rl/01_freecad_cad/exports/microduck_beak_bumper_bracket.obj"
+          },
+          "primitives": [
+            {
+              "name": "bracket_front_bumper",
+              "center_xyz": [
+                0.0145,
+                0.0,
+                0.007
+              ],
+              "extents_xyz": [
+                0.003,
+                0.056,
+                0.014
+              ],
+              "category": "robot_attachment",
+              "rgba": [
+                0.2,
+                0.25,
+                0.3,
+                1.0
+              ]
+            },
+            {
+              "name": "bracket_left_arm",
+              "center_xyz": [
+                0.0,
+                0.0265,
+                0.007
+              ],
+              "extents_xyz": [
+                0.032,
+                0.003,
+                0.014
+              ],
+              "category": "robot_attachment",
+              "rgba": [
+                0.2,
+                0.25,
+                0.3,
+                1.0
+              ]
+            },
+            {
+              "name": "bracket_right_arm",
+              "center_xyz": [
+                0.0,
+                -0.0265,
+                0.007
+              ],
+              "extents_xyz": [
+                0.032,
+                0.003,
+                0.014
+              ],
+              "category": "robot_attachment",
+              "rgba": [
+                0.2,
+                0.25,
+                0.3,
+                1.0
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "stage_b_mesh": {
+      "backend": {
+        "blender_binary": null,
+        "bpy_module": false,
+        "active_engine": "argon_trimesh_normalizer"
+      },
+      "robot_mesh_count": 43,
+      "terrain_mesh_count": 3,
+      "all_scales_verified_meters": true
+    },
+    "stage_b_usd": {
+      "stage": "Stage B (Part 2) - URDF & Omniverse OpenUSD SimReady Compiler",
+      "generated_at": "2026-10-23T09:31:21.884353+00:00",
+      "source_mjcf": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/robot_groundcontact.xml",
+      "total_links": 15,
+      "total_joints": 14,
+      "actuated_servo_count": 14,
+      "canonical_14_servo_match": true,
+      "all_joint_limits_valid": true,
+      "total_robot_mass_kg": 0.73724,
+      "visual_geoms_count": 70,
+      "collision_geoms_count": 10,
+      "xl330_drive_spec": {
+        "max_effort_nm": 0.963,
+        "max_velocity_rad_s": 9.95,
+        "bam_stiffness_nm_rad": 6.91,
+        "bam_damping_nms_rad": 0.258
+      },
+      "outputs": {
+        "urdf": "/home/dhp01/microduck_rl/02_blender_omniverse_usd/usd_assets/microduck.urdf",
+        "robot_simready_usda": "/home/dhp01/microduck_rl/02_blender_omniverse_usd/usd_assets/microduck_simready.usda",
+        "terrain_course_usda": "/home/dhp01/microduck_rl/02_blender_omniverse_usd/usd_assets/terrain_course.usda",
+        "terrain_collider_primitives": 15
+      },
+      "joints_detail": [
+        {
+          "name": "left_hip_yaw",
+          "parent_body": "trunk_base",
+          "child_body": "yaw2roll",
+          "axis": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "lower_rad": -0.4363323129985824,
+          "upper_rad": 0.5235987755982988,
+          "effort_nm": 0.963,
+          "velocity_rad_s": 9.95,
+          "stiffness": 6.91,
+          "damping": 0.258,
+          "armature": 0.0018,
+          "is_passive": false
+        },
+        {
+          "name": "left_hip_roll",
+          "parent_body": "yaw2roll",
+          "child_body": "hip_l",
+          "axis": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "lower_rad": -0.3839724354386992,
+          "upper_rad": 0.38397243543880577,
+          "effort_nm": 0.963,
+          "velocity_rad_s": 9.95,
+          "stiffness": 6.91,
+          "damping": 0.258,
+          "armature": 0.0018,
+          "is_passive": false
+        },
+        {
+          "name": "left_hip_pitch",
+          "parent_body": "hip_l",
+          "child_body": "upper_leg_left",
+          "axis": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "lower_rad": -1.570796326794949,
+          "upper_rad": 1.5707963267948442,
+          "effort_nm": 0.963,
+          "velocity_rad_s": 9.95,
+          "stiffness": 6.91,
+          "damping": 0.258,
+          "armature": 0.0018,
+          "is_passive": false
+        },
+        {
+          "name": "left_knee",
+          "parent_body": "upper_leg_left",
+          "child_body": "leg",
+          "axis": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "lower_rad": -1.5707963267948983,
+          "upper_rad": 1.5707963267948948,
+          "effort_nm": 0.963,
+          "velocity_rad_s": 9.95,
+          "stiffness": 6.91,
+          "damping": 0.258,
+          "armature": 0.0018,
+          "is_passive": false
+        },
+        {
+          "name": "left_ankle",
+          "parent_body": "leg",
+          "child_body": "ankle_left",
+          "axis": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "lower_rad": -1.5707963267949063,
+          "upper_rad": 1.5707963267948868,
+          "effort_nm": 0.963,
+          "velocity_rad_s": 9.95,
+          "stiffness": 6.91,
+          "damping": 0.258,
+          "armature": 0.0018,
+          "is_passive": false
+        },
+        {
+          "name": "neck_pitch",
+          "parent_body": "trunk_base",
+          "child_body": "neck",
+          "axis": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "lower_rad": -1.5707963267948974,
+          "upper_rad": 1.0471975511965967,
+          "effort_nm": 0.963,
+          "velocity_rad_s": 9.95,
+          "stiffness": 6.91,
+          "damping": 0.258,
+          "armature": 0.0018,
+          "is_passive": false
+        },
+        {
+          "name": "head_pitch",
+          "parent_body": "neck",
+          "child_body": "neck_pitch",
+          "axis": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "lower_rad": -1.5707963267948966,
+          "upper_rad": 1.5707963267948966,
+          "effort_nm": 0.963,
+          "velocity_rad_s": 9.95,
+          "stiffness": 6.91,
+          "damping": 0.258,
+          "armature": 0.0018,
+          "is_passive": false
+        },
+        {
+          "name": "head_yaw",
+          "parent_body": "neck_pitch",
+          "child_body": "yaw_roll_motion",
+          "axis": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "lower_rad": -2.9670597283903613,
+          "upper_rad": 2.9670597283903595,
+          "effort_nm": 0.963,
+          "velocity_rad_s": 9.95,
+          "stiffness": 6.91,
+          "damping": 0.258,
+          "armature": 0.0018,
+          "is_passive": false
+        },
+        {
+          "name": "head_roll",
+          "parent_body": "yaw_roll_motion",
+          "child_body": "jaw_soft",
+          "axis": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "lower_rad": -0.43633231299858327,
+          "upper_rad": 0.4363323129985815,
+          "effort_nm": 0.963,
+          "velocity_rad_s": 9.95,
+          "stiffness": 6.91,
+          "damping": 0.258,
+          "armature": 0.0018,
+          "is_passive": false
+        },
+        {
+          "name": "right_hip_yaw",
+          "parent_body": "trunk_base",
+          "child_body": "bearing_roll",
+          "axis": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "lower_rad": -0.523598775598297,
+          "upper_rad": 0.43633231299858416,
+          "effort_nm": 0.963,
+          "velocity_rad_s": 9.95,
+          "stiffness": 6.91,
+          "damping": 0.258,
+          "armature": 0.0018,
+          "is_passive": false
+        },
+        {
+          "name": "right_hip_roll",
+          "parent_body": "bearing_roll",
+          "child_body": "hip_l_2",
+          "axis": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "lower_rad": -0.3839724354387507,
+          "upper_rad": 0.38397243543875426,
+          "effort_nm": 0.963,
+          "velocity_rad_s": 9.95,
+          "stiffness": 6.91,
+          "damping": 0.258,
+          "armature": 0.0018,
+          "is_passive": false
+        },
+        {
+          "name": "right_hip_pitch",
+          "parent_body": "hip_l_2",
+          "child_body": "upper_leg_right",
+          "axis": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "lower_rad": -1.57079632679494,
+          "upper_rad": 1.570796326794853,
+          "effort_nm": 0.963,
+          "velocity_rad_s": 9.95,
+          "stiffness": 6.91,
+          "damping": 0.258,
+          "armature": 0.0018,
+          "is_passive": false
+        },
+        {
+          "name": "right_knee",
+          "parent_body": "upper_leg_right",
+          "child_body": "leg_2",
+          "axis": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "lower_rad": -1.5707963267949339,
+          "upper_rad": 1.5707963267948593,
+          "effort_nm": 0.963,
+          "velocity_rad_s": 9.95,
+          "stiffness": 6.91,
+          "damping": 0.258,
+          "armature": 0.0018,
+          "is_passive": false
+        },
+        {
+          "name": "right_ankle",
+          "parent_body": "leg_2",
+          "child_body": "ankle_right",
+          "axis": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "lower_rad": -1.5707963267949028,
+          "upper_rad": 1.5707963267948903,
+          "effort_nm": 0.963,
+          "velocity_rad_s": 9.95,
+          "stiffness": 6.91,
+          "damping": 0.258,
+          "armature": 0.0018,
+          "is_passive": false
+        }
+      ]
+    },
+    "stage_c_rl": {
+      "stage": "Stage C - Newton / Isaac Lab & MuJoCo Warp RL Execution",
+      "generated_at": "2026-10-23T09:31:49.429273+00:00",
+      "isaaclab_newton_spec": {
+        "task_id": "Mjlab-StairsClimb-MicroDuck",
+        "physics_engine": "NVIDIA_Warp_Newton_MJWarp",
+        "sim_dt_s": 0.005,
+        "decimation": 4,
+        "control_freq_hz": 50.0,
+        "episode_length_s": 20.0,
+        "num_envs_default": 4096,
+        "actor_obs_dim": 61,
+        "action_dim": 14,
+        "actor_obs_layout": [
+          "base_ang_vel(3)",
+          "projected_gravity(3)",
+          "joint_pos_rel_14(14)",
+          "joint_vel_14(14)",
+          "actions_14(14)",
+          "command_twist_vx_vy_wz(3)",
+          "head_command_4d(4)",
+          "body_command_6d(6)"
+        ],
+        "curriculum_stages_iters": [
+          0,
+          1500,
+          3000,
+          4500
+        ],
+        "swing_clearance_stages_m": [
+          0.035,
+          0.045,
+          0.05,
+          0.055
+        ],
+        "hierarchical_coordinator": "NekoCore(QuinticSkillBlender_C2 + GaitPhaseLatch_DoubleSupport)",
+        "articulation": {
+          "prim_path": "{ENV_REGEX_NS}/Microduck",
+          "usd_path": "/home/dhp01/microduck_rl/02_blender_omniverse_usd/usd_assets/microduck_simready.usda",
+          "urdf_path": "/home/dhp01/microduck_rl/02_blender_omniverse_usd/usd_assets/microduck.urdf",
+          "terrain_usd_path": "/home/dhp01/microduck_rl/02_blender_omniverse_usd/usd_assets/terrain_course.usda",
+          "actuated_joint_names": [
+            "left_hip_yaw",
+            "left_hip_roll",
+            "left_hip_pitch",
+            "left_knee",
+            "left_ankle",
+            "neck_pitch",
+            "head_pitch",
+            "head_yaw",
+            "head_roll",
+            "right_hip_yaw",
+            "right_hip_roll",
+            "right_hip_pitch",
+            "right_knee",
+            "right_ankle"
+          ],
+          "passive_joint_regex": "^passive_.*",
+          "actuator_model": "BAM_M6_XL330_VoltageControl",
+          "kp_firmware": 200.0,
+          "vin_range_v": [
+            6.5,
+            8.2
+          ],
+          "max_effort_nm": 0.963,
+          "max_velocity_rad_s": 9.95,
+          "init_pos_xyz_m": [
+            0.0,
+            0.0,
+            0.125
+          ],
+          "init_joint_pos_rad": {
+            "left_hip_yaw": 0.0,
+            "left_hip_roll": -0.0873,
+            "left_hip_pitch": -0.4579,
+            "left_knee": -0.0049,
+            "left_ankle": 0.453,
+            "neck_pitch": 0.3491,
+            "head_pitch": 0.3491,
+            "head_yaw": 0.0,
+            "head_roll": 0.0,
+            "right_hip_yaw": 0.0,
+            "right_hip_roll": 0.0873,
+            "right_hip_pitch": 0.4579,
+            "right_knee": 0.0049,
+            "right_ankle": -0.453
+          }
+        }
+      },
+      "mjlab_warp_verification": {
+        "actor_observation_terms": [
+          "base_ang_vel",
+          "projected_gravity",
+          "joint_pos",
+          "joint_vel",
+          "actions",
+          "command",
+          "head_command",
+          "body_command"
+        ],
+        "actor_61d_contract_verified": true,
+        "bam_startup_event_registered": true,
+        "stairs_curriculum_stages_iters": [
+          0,
+          1500,
+          3000,
+          4500
+        ],
+        "stairs_clearance_stages_m": [
+          {
+            "step": 0,
+            "target_height": 0.035
+          },
+          {
+            "step": 36000,
+            "target_height": 0.045
+          },
+          {
+            "step": 72000,
+            "target_height": 0.05
+          },
+          {
+            "step": 108000,
+            "target_height": 0.055
+          }
+        ],
+        "curriculum_aligned": true,
+        "velocity_env_reward_terms_count": 34,
+        "stairs_env_reward_terms_count": 58
+      },
+      "neko_core_verification": {
+        "quintic_blender_active": true,
+        "quintic_first_step_norm": 0.002502,
+        "gait_phase_latch_double_support_fired": true,
+        "neko_is_transitioning": true,
+        "neko_output_shape": [
+          14
+        ],
+        "ablation_benchmark_summary": {
+          "benchmark": "neko_core_ablation",
+          "walk_policy": "walking.onnx",
+          "stand_policy": "standing.onnx",
+          "trials_per_config": 25,
+          "transition_window_s": 0.25,
+          "protocol": "Walk 1.0s \u2192 Stand 1.6s",
+          "results": [
+            {
+              "config_name": "1_HardSwitch",
+              "n_trials": 25,
+              "success_rate": 100.0,
+              "v_min_mean": 7.098773643295542,
+              "v_min_std": 0.0167750878375831,
+              "v_min_worst": 7.09171076491661,
+              "maj_mean": 4372.82396484375,
+              "maj_std": 1672.7445484901855,
+              "peak_delta_mean": 1.504319622516632,
+              "peak_delta_std": 0.5422465561052379,
+              "peak_delta_worst": 2.7204601764678955,
+              "yaw_drift_mean": 9.18805509407929,
+              "yaw_drift_std": 4.616347714519087,
+              "transition_1_mean_steps": 0.0,
+              "transition_2_mean_steps": 0.0
+            },
+            {
+              "config_name": "2_Linear_C0",
+              "n_trials": 25,
+              "success_rate": 60.0,
+              "v_min_mean": 7.027994520892445,
+              "v_min_std": 0.070596497384901,
+              "v_min_worst": 6.891297165246537,
+              "maj_mean": 2471.7497021484373,
+              "maj_std": 1007.1628240785074,
+              "peak_delta_mean": 0.12034555584192276,
+              "peak_delta_std": 0.04337971868644635,
+              "peak_delta_worst": 0.21763679385185242,
+              "yaw_drift_mean": 12.891766580673936,
+              "yaw_drift_std": 9.906291404450089,
+              "transition_1_mean_steps": 12.0,
+              "transition_2_mean_steps": 0.0
+            },
+            {
+              "config_name": "3_Quintic_C2",
+              "n_trials": 25,
+              "success_rate": 56.0,
+              "v_min_mean": 7.028571738619894,
+              "v_min_std": 0.062026411865531664,
+              "v_min_worst": 6.912452370884138,
+              "maj_mean": 2579.889140625,
+              "maj_std": 1158.998370500622,
+              "peak_delta_mean": 0.006807423448190093,
+              "peak_delta_std": 0.0024538032576639983,
+              "peak_delta_worst": 0.012310781516134739,
+              "yaw_drift_mean": 13.46546678274144,
+              "yaw_drift_std": 11.383598188535128,
+              "transition_1_mean_steps": 12.0,
+              "transition_2_mean_steps": 0.0
+            },
+            {
+              "config_name": "4_Neko_Full",
+              "n_trials": 25,
+              "success_rate": 96.0,
+              "v_min_mean": 7.093081640528799,
+              "v_min_std": 0.01957271286132702,
+              "v_min_worst": 7.024402856049248,
+              "maj_mean": 2418.409697265625,
+              "maj_std": 1189.5424512749541,
+              "peak_delta_mean": 0.006416043806821108,
+              "peak_delta_std": 0.0018321105045547214,
+              "peak_delta_worst": 0.009966270066797733,
+              "yaw_drift_mean": 12.203067237942282,
+              "yaw_drift_std": 8.652064821913308,
+              "transition_1_mean_steps": 27.76,
+              "transition_2_mean_steps": 0.0
+            }
+          ]
+        }
+      },
+      "cad_to_physics_scene_bridge": {
+        "compiled_scene_xml": "/home/dhp01/microduck_rl/03_newton_isaaclab_rl/generated_argon_cad_scene.xml",
+        "runtime_scene_xml": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/scene_argon_cad_runtime.xml",
+        "nq": 21,
+        "nv": 20,
+        "nu": 14,
+        "ngeom": 97,
+        "simulation_step_nan_free": true
+      },
+      "closed_loop_cad_terrain_rollout": {
+        "policy_onnx_used": "/home/dhp01/microduck_rl/walking.onnx",
+        "duration_s": 8.0,
+        "total_control_steps": 400,
+        "start_pos_xz_m": [
+          0.0002,
+          0.115
+        ],
+        "final_pos_xz_m": [
+          0.2206,
+          0.1192
+        ],
+        "forward_distance_dx_m": 0.2204,
+        "elevation_gain_dz_mm": 4.18,
+        "peak_trunk_z_mm": 122.33,
+        "max_abs_pitch_deg": 4.45,
+        "max_abs_roll_deg": 5.7,
+        "min_bam_voltage_v": 7.096,
+        "survived_without_fall": true,
+        "trajectory_csv": "/home/dhp01/microduck_rl/docs_and_logs/argon_cad_stairs_trajectory.csv",
+        "rollout_gif": "/home/dhp01/microduck_rl/docs_and_logs/argon_cad_stairs_rollout.gif",
+        "keyframes_dir": "/home/dhp01/microduck_rl/docs_and_logs/cad_rollout_frames"
+      },
+      "live_warp_gpu_rollout_and_export": {
+        "task_id": "Mjlab-StairsClimb-MicroDuck",
+        "device": "cuda:0",
+        "checkpoint_loaded": "/home/dhp01/microduck_rl/logs/rsl_rl/stairs_climb/2026-10-17_08-16-27_stairs_climb/model_2999.pt",
+        "checkpoint_iteration": 2999,
+        "exported_onnx_path": "/home/dhp01/microduck_rl/docs_and_logs/argon_verified_stairs_policy.onnx",
+        "exported_onnx_size_bytes": 793797,
+        "num_parallel_gpu_envs": 16,
+        "eval_steps_per_env": 100,
+        "mean_step_reward": -0.01236,
+        "mean_forward_dx_m": 0.2984,
+        "max_forward_dx_m": 0.6146,
+        "mean_final_trunk_z_m": 0.1243,
+        "survival_rate_pct": 100.0
+      }
+    }
+  },
+  "elapsed_seconds": 39.399
+}

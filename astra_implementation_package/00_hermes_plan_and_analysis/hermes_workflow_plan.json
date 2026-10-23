@@ -1,0 +1,35 @@
+{
+  "planner": "Hermes Local Workflow & Curriculum Architect (Argon / Local Nemotron-Compatible Schema)",
+  "generated_at": "2026-10-23T11:40:08.862122+00:00",
+  "hardware_targets": {
+    "gpu_compute": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "cuda_version": "12.8",
+    "opengl_renderer": "egl"
+  },
+  "obstacle_course_zones": [
+    {
+      "zone_id": 1,
+      "name": "3D Cobblestone Rough Field (h=2.5..6.0mm) & Slalom Pylons (x=0.16..0.34m)",
+      "perception_modality": "OpenGL head_camera [ROUGH] + [PYLON] HSV & Metric Depth",
+      "locomotion_skill": "walking_rough.onnx / walking.onnx + StairStepBooster L1 probe"
+    },
+    {
+      "zone_id": 2,
+      "name": "Progressive Staircase Step 1 & Step 2 (x=0.42m [8mm], x=0.52m [16mm])",
+      "perception_modality": "OpenGL head_camera [STAIR] Mask + ToF Rangefinder + Riser Force Probe",
+      "locomotion_skill": "NekoCore C\u00b2 handoff -> StairStepBooster (L2-L4 swing knee/ankle boost & stance counter-pitch lean)"
+    },
+    {
+      "zone_id": 3,
+      "name": "Summit Platform Step 3 (x=0.68m, cumulative elevation=24mm)",
+      "perception_modality": "Pitch IMU + ToF + Summit Elevation Verification",
+      "locomotion_skill": "Stance push-off & summit landing stabilization"
+    },
+    {
+      "zone_id": 4,
+      "name": "Emerald Summit Goal Beacon (x=0.75m, z=0.094m)",
+      "perception_modality": "OpenGL head_camera [GOAL] Centroid & Metric Depth <= 0.20m",
+      "locomotion_skill": "NekoCore C\u00b2 QuinticSkillBlender + GaitPhaseLatch -> standing.onnx"
+    }
+  ]
+}

@@ -1,0 +1,1242 @@
+{
+  "stage": "Stage B (Part 1) - Blender / Argon Mesh Processor",
+  "generated_at": "2026-10-23T15:22:44.939542+00:00",
+  "backend": {
+    "blender_binary": null,
+    "bpy_module": false,
+    "active_engine": "argon_trimesh_normalizer"
+  },
+  "coordinate_system": {
+    "up_axis": "Z",
+    "meters_per_unit": 1.0
+  },
+  "robot_mesh_count": 43,
+  "terrain_mesh_count": 4,
+  "all_scales_verified_meters": true,
+  "robot_meshes": [
+    {
+      "file": "ankle_l_v1.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/ankle_l_v1.stl",
+      "num_vertices": 2347,
+      "num_faces": 4718,
+      "is_watertight": true,
+      "max_extent_m": 0.046498,
+      "extents_xyz_m": [
+        0.039489,
+        0.046498,
+        0.0254
+      ],
+      "bounds_min_xyz_m": [
+        0.030364,
+        -0.008537,
+        -0.022423
+      ],
+      "bounds_max_xyz_m": [
+        0.069854,
+        0.037961,
+        0.002977
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "ankle_left.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/ankle_left.stl",
+      "num_vertices": 2477,
+      "num_faces": 4978,
+      "is_watertight": true,
+      "max_extent_m": 0.039489,
+      "extents_xyz_m": [
+        0.039489,
+        0.0365,
+        0.0255
+      ],
+      "bounds_min_xyz_m": [
+        0.030364,
+        0.000163,
+        -0.022523
+      ],
+      "bounds_max_xyz_m": [
+        0.069854,
+        0.036663,
+        0.002977
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "ankle_r_v1.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/ankle_r_v1.stl",
+      "num_vertices": 2345,
+      "num_faces": 4714,
+      "is_watertight": true,
+      "max_extent_m": 0.046497,
+      "extents_xyz_m": [
+        0.039489,
+        0.046497,
+        0.0254
+      ],
+      "bounds_min_xyz_m": [
+        -0.069854,
+        -0.008537,
+        -0.022423
+      ],
+      "bounds_max_xyz_m": [
+        -0.030364,
+        0.037961,
+        0.002977
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "ankle_right.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/ankle_right.stl",
+      "num_vertices": 2476,
+      "num_faces": 4976,
+      "is_watertight": true,
+      "max_extent_m": 0.039489,
+      "extents_xyz_m": [
+        0.039489,
+        0.0365,
+        0.0255
+      ],
+      "bounds_min_xyz_m": [
+        -0.069854,
+        0.000163,
+        -0.022523
+      ],
+      "bounds_max_xyz_m": [
+        -0.030364,
+        0.036663,
+        0.002977
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "banana_pcb_locker.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/banana_pcb_locker.stl",
+      "num_vertices": 692,
+      "num_faces": 1388,
+      "is_watertight": true,
+      "max_extent_m": 0.05405,
+      "extents_xyz_m": [
+        0.05405,
+        0.0038,
+        0.006652
+      ],
+      "bounds_min_xyz_m": [
+        -0.027025,
+        0.0327,
+        0.048974
+      ],
+      "bounds_max_xyz_m": [
+        0.027025,
+        0.0365,
+        0.055626
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "bearing_roll.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/bearing_roll.stl",
+      "num_vertices": 1202,
+      "num_faces": 2420,
+      "is_watertight": true,
+      "max_extent_m": 0.04,
+      "extents_xyz_m": [
+        0.023,
+        0.003,
+        0.04
+      ],
+      "bounds_min_xyz_m": [
+        0.006,
+        -0.0145,
+        -0.0245
+      ],
+      "bounds_max_xyz_m": [
+        0.029,
+        -0.0115,
+        0.0155
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "bottom_head_shell.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/bottom_head_shell.stl",
+      "num_vertices": 10477,
+      "num_faces": 20970,
+      "is_watertight": true,
+      "max_extent_m": 0.116748,
+      "extents_xyz_m": [
+        0.091763,
+        0.116748,
+        0.020136
+      ],
+      "bounds_min_xyz_m": [
+        -0.045881,
+        -0.060248,
+        -0.012636
+      ],
+      "bounds_max_xyz_m": [
+        0.045882,
+        0.0565,
+        0.0075
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "elec_rpi_robot_hat_pcb.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/elec_rpi_robot_hat_pcb.stl",
+      "num_vertices": 9308,
+      "num_faces": 18856,
+      "is_watertight": true,
+      "max_extent_m": 0.065025,
+      "extents_xyz_m": [
+        0.065025,
+        0.030025,
+        0.00084
+      ],
+      "bounds_min_xyz_m": [
+        -0.00352,
+        -0.02651,
+        0.0
+      ],
+      "bounds_max_xyz_m": [
+        0.061505,
+        0.003515,
+        0.00084
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "face_part.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/face_part.stl",
+      "num_vertices": 5698,
+      "num_faces": 11412,
+      "is_watertight": true,
+      "max_extent_m": 0.087651,
+      "extents_xyz_m": [
+        0.087651,
+        0.0125,
+        0.044626
+      ],
+      "bounds_min_xyz_m": [
+        -0.043825,
+        -0.0555,
+        -0.0008
+      ],
+      "bounds_max_xyz_m": [
+        0.043825,
+        -0.043,
+        0.043826
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "foot_left.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/foot_left.stl",
+      "num_vertices": 9939,
+      "num_faces": 19922,
+      "is_watertight": true,
+      "max_extent_m": 0.054,
+      "extents_xyz_m": [
+        0.040086,
+        0.054,
+        0.016909
+      ],
+      "bounds_min_xyz_m": [
+        0.030081,
+        -0.012,
+        -0.029251
+      ],
+      "bounds_max_xyz_m": [
+        0.070166,
+        0.042,
+        -0.012342
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "foot_right.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/foot_right.stl",
+      "num_vertices": 9954,
+      "num_faces": 19952,
+      "is_watertight": true,
+      "max_extent_m": 0.054,
+      "extents_xyz_m": [
+        0.040086,
+        0.054,
+        0.016909
+      ],
+      "bounds_min_xyz_m": [
+        -0.070166,
+        -0.012,
+        -0.029251
+      ],
+      "bounds_max_xyz_m": [
+        -0.030081,
+        0.042,
+        -0.012342
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "hip_l.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/hip_l.stl",
+      "num_vertices": 10471,
+      "num_faces": 20970,
+      "is_watertight": true,
+      "max_extent_m": 0.0345,
+      "extents_xyz_m": [
+        0.03245,
+        0.0345,
+        0.019
+      ],
+      "bounds_min_xyz_m": [
+        0.008,
+        -0.025,
+        -0.0095
+      ],
+      "bounds_max_xyz_m": [
+        0.04045,
+        0.0095,
+        0.0095
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "jaw.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/jaw.stl",
+      "num_vertices": 4949,
+      "num_faces": 9918,
+      "is_watertight": true,
+      "max_extent_m": 0.091416,
+      "extents_xyz_m": [
+        0.091416,
+        0.06871,
+        0.029448
+      ],
+      "bounds_min_xyz_m": [
+        -0.045708,
+        -0.05971,
+        -0.012948
+      ],
+      "bounds_max_xyz_m": [
+        0.045708,
+        0.009,
+        0.0165
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "jaw_soft.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/jaw_soft.stl",
+      "num_vertices": 3365,
+      "num_faces": 6726,
+      "is_watertight": true,
+      "max_extent_m": 0.087674,
+      "extents_xyz_m": [
+        0.087674,
+        0.032234,
+        0.008438
+      ],
+      "bounds_min_xyz_m": [
+        -0.043837,
+        -0.057735,
+        -0.011148
+      ],
+      "bounds_max_xyz_m": [
+        0.043837,
+        -0.025501,
+        -0.00271
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "left_shell.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/left_shell.stl",
+      "num_vertices": 10475,
+      "num_faces": 20970,
+      "is_watertight": true,
+      "max_extent_m": 0.08089,
+      "extents_xyz_m": [
+        0.033714,
+        0.08089,
+        0.041691
+      ],
+      "bounds_min_xyz_m": [
+        -0.00195,
+        -0.0305,
+        0.017836
+      ],
+      "bounds_max_xyz_m": [
+        0.031764,
+        0.05039,
+        0.059526
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "leg.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/leg.stl",
+      "num_vertices": 7374,
+      "num_faces": 14776,
+      "is_watertight": true,
+      "max_extent_m": 0.058,
+      "extents_xyz_m": [
+        0.00795,
+        0.02,
+        0.058
+      ],
+      "bounds_min_xyz_m": [
+        0.0325,
+        0.012,
+        -0.012223
+      ],
+      "bounds_max_xyz_m": [
+        0.04045,
+        0.032,
+        0.045777
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "lens.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/lens.stl",
+      "num_vertices": 938,
+      "num_faces": 1872,
+      "is_watertight": true,
+      "max_extent_m": 0.01892,
+      "extents_xyz_m": [
+        0.01694,
+        0.01892,
+        0.01694
+      ],
+      "bounds_min_xyz_m": [
+        -0.00847,
+        0.0074,
+        -0.00847
+      ],
+      "bounds_max_xyz_m": [
+        0.00847,
+        0.02632,
+        0.00847
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "m12_lens_holder.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/m12_lens_holder.stl",
+      "num_vertices": 5490,
+      "num_faces": 10992,
+      "is_watertight": true,
+      "max_extent_m": 0.024,
+      "extents_xyz_m": [
+        0.024,
+        0.0148,
+        0.016
+      ],
+      "bounds_min_xyz_m": [
+        -0.012,
+        -0.0,
+        -0.008
+      ],
+      "bounds_max_xyz_m": [
+        0.012,
+        0.0148,
+        0.008
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "motor_support.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/motor_support.stl",
+      "num_vertices": 1800,
+      "num_faces": 3616,
+      "is_watertight": true,
+      "max_extent_m": 0.0735,
+      "extents_xyz_m": [
+        0.0735,
+        0.0542,
+        0.0188
+      ],
+      "bounds_min_xyz_m": [
+        -0.0395,
+        -0.0262,
+        0.0004
+      ],
+      "bounds_max_xyz_m": [
+        0.034,
+        0.028,
+        0.0192
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "neck.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/neck.stl",
+      "num_vertices": 728,
+      "num_faces": 1468,
+      "is_watertight": true,
+      "max_extent_m": 0.02,
+      "extents_xyz_m": [
+        0.002,
+        0.02,
+        0.011
+      ],
+      "bounds_min_xyz_m": [
+        0.0,
+        -0.032,
+        0.0695
+      ],
+      "bounds_max_xyz_m": [
+        0.002,
+        -0.012,
+        0.0805
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "neck_pitch.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/neck_pitch.stl",
+      "num_vertices": 3532,
+      "num_faces": 7120,
+      "is_watertight": true,
+      "max_extent_m": 0.035,
+      "extents_xyz_m": [
+        0.035,
+        0.018,
+        0.027693
+      ],
+      "bounds_min_xyz_m": [
+        -0.0175,
+        -0.009,
+        -0.037793
+      ],
+      "bounds_max_xyz_m": [
+        0.0175,
+        0.009,
+        -0.0101
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "noenoeil.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/noenoeil.stl",
+      "num_vertices": 492,
+      "num_faces": 984,
+      "is_watertight": true,
+      "max_extent_m": 0.03,
+      "extents_xyz_m": [
+        0.03,
+        0.0095,
+        0.03
+      ],
+      "bounds_min_xyz_m": [
+        -0.015,
+        -0.0635,
+        0.005
+      ],
+      "bounds_max_xyz_m": [
+        0.015,
+        -0.054,
+        0.035
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "np_f970.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/np_f970.stl",
+      "num_vertices": 10487,
+      "num_faces": 20970,
+      "is_watertight": true,
+      "max_extent_m": 0.070809,
+      "extents_xyz_m": [
+        0.038608,
+        0.020576,
+        0.070809
+      ],
+      "bounds_min_xyz_m": [
+        -0.0193,
+        -0.010326,
+        -0.0354
+      ],
+      "bounds_max_xyz_m": [
+        0.019308,
+        0.01025,
+        0.035409
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "pcb__raspberry_pi_zero_2_w.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/pcb__raspberry_pi_zero_2_w.stl",
+      "num_vertices": 10399,
+      "num_faces": 20970,
+      "is_watertight": true,
+      "max_extent_m": 0.065,
+      "extents_xyz_m": [
+        0.065,
+        0.0016,
+        0.03
+      ],
+      "bounds_min_xyz_m": [
+        -0.0325,
+        -0.0008,
+        -0.015
+      ],
+      "bounds_max_xyz_m": [
+        0.0325,
+        0.0008,
+        0.015
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "power_support.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/power_support.stl",
+      "num_vertices": 6384,
+      "num_faces": 12832,
+      "is_watertight": true,
+      "max_extent_m": 0.08349,
+      "extents_xyz_m": [
+        0.0545,
+        0.017,
+        0.08349
+      ],
+      "bounds_min_xyz_m": [
+        -0.02725,
+        0.018,
+        -0.026546
+      ],
+      "bounds_max_xyz_m": [
+        0.02725,
+        0.035,
+        0.056944
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "right_shell.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/right_shell.stl",
+      "num_vertices": 10475,
+      "num_faces": 20970,
+      "is_watertight": true,
+      "max_extent_m": 0.080898,
+      "extents_xyz_m": [
+        0.031764,
+        0.080898,
+        0.041693
+      ],
+      "bounds_min_xyz_m": [
+        -0.031764,
+        -0.0305,
+        0.017834
+      ],
+      "bounds_max_xyz_m": [
+        0.0,
+        0.050398,
+        0.059526
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "rim.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/rim.stl",
+      "num_vertices": 1152,
+      "num_faces": 2304,
+      "is_watertight": true,
+      "max_extent_m": 0.0202,
+      "extents_xyz_m": [
+        0.0076,
+        0.0202,
+        0.0202
+      ],
+      "bounds_min_xyz_m": [
+        0.0462,
+        -0.0276,
+        -0.048823
+      ],
+      "bounds_max_xyz_m": [
+        0.0538,
+        -0.0074,
+        -0.028623
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "roller_blade.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/roller_blade.stl",
+      "num_vertices": 10468,
+      "num_faces": 20968,
+      "is_watertight": true,
+      "max_extent_m": 0.072999,
+      "extents_xyz_m": [
+        0.040541,
+        0.072999,
+        0.030379
+      ],
+      "bounds_min_xyz_m": [
+        0.029729,
+        -0.0215,
+        -0.042721
+      ],
+      "bounds_max_xyz_m": [
+        0.070271,
+        0.0515,
+        -0.012342
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "seeed_bearing__configuration__22x16x4.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration__22x16x4.stl",
+      "num_vertices": 10441,
+      "num_faces": 20970,
+      "is_watertight": true,
+      "max_extent_m": 0.022,
+      "extents_xyz_m": [
+        0.022,
+        0.022,
+        0.004
+      ],
+      "bounds_min_xyz_m": [
+        -0.011,
+        -0.011,
+        0.0
+      ],
+      "bounds_max_xyz_m": [
+        0.011,
+        0.011,
+        0.004
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "seeed_bearing__configuration_default.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration_default.stl",
+      "num_vertices": 10441,
+      "num_faces": 20970,
+      "is_watertight": true,
+      "max_extent_m": 0.015,
+      "extents_xyz_m": [
+        0.015,
+        0.015,
+        0.003
+      ],
+      "bounds_min_xyz_m": [
+        -0.0075,
+        -0.0075,
+        0.0
+      ],
+      "bounds_max_xyz_m": [
+        0.0075,
+        0.0075,
+        0.003
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "soft_mouth_top.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/soft_mouth_top.stl",
+      "num_vertices": 3937,
+      "num_faces": 7870,
+      "is_watertight": true,
+      "max_extent_m": 0.087822,
+      "extents_xyz_m": [
+        0.087822,
+        0.032565,
+        0.003276
+      ],
+      "bounds_min_xyz_m": [
+        -0.043911,
+        -0.058066,
+        -0.004971
+      ],
+      "bounds_max_xyz_m": [
+        0.043911,
+        -0.025501,
+        -0.001695
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "sole_left.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/sole_left.stl",
+      "num_vertices": 7896,
+      "num_faces": 15788,
+      "is_watertight": true,
+      "max_extent_m": 0.054,
+      "extents_xyz_m": [
+        0.041099,
+        0.054,
+        0.012907
+      ],
+      "bounds_min_xyz_m": [
+        0.029455,
+        -0.012,
+        -0.031249
+      ],
+      "bounds_max_xyz_m": [
+        0.070554,
+        0.042,
+        -0.018342
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "sole_right.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/sole_right.stl",
+      "num_vertices": 7953,
+      "num_faces": 15902,
+      "is_watertight": true,
+      "max_extent_m": 0.054,
+      "extents_xyz_m": [
+        0.041099,
+        0.054,
+        0.012908
+      ],
+      "bounds_min_xyz_m": [
+        -0.070554,
+        -0.012,
+        -0.03125
+      ],
+      "bounds_max_xyz_m": [
+        -0.029455,
+        0.042,
+        -0.018342
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "speaker.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/speaker.stl",
+      "num_vertices": 8,
+      "num_faces": 12,
+      "is_watertight": true,
+      "max_extent_m": 0.035,
+      "extents_xyz_m": [
+        0.035,
+        0.025,
+        0.007
+      ],
+      "bounds_min_xyz_m": [
+        0.0,
+        -0.025,
+        0.0
+      ],
+      "bounds_max_xyz_m": [
+        0.035,
+        0.0,
+        0.007
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "tire.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/tire.stl",
+      "num_vertices": 3528,
+      "num_faces": 7056,
+      "is_watertight": true,
+      "max_extent_m": 0.03,
+      "extents_xyz_m": [
+        0.0076,
+        0.03,
+        0.03
+      ],
+      "bounds_min_xyz_m": [
+        0.0462,
+        -0.0325,
+        -0.053723
+      ],
+      "bounds_max_xyz_m": [
+        0.0538,
+        -0.0025,
+        -0.023723
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "top_head_shell.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/top_head_shell.stl",
+      "num_vertices": 8062,
+      "num_faces": 16120,
+      "is_watertight": true,
+      "max_extent_m": 0.12269,
+      "extents_xyz_m": [
+        0.091759,
+        0.12269,
+        0.046336
+      ],
+      "bounds_min_xyz_m": [
+        -0.04588,
+        -0.06619,
+        -1e-06
+      ],
+      "bounds_max_xyz_m": [
+        0.04588,
+        0.0565,
+        0.046335
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "trunk_base.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/trunk_base.stl",
+      "num_vertices": 1837,
+      "num_faces": 3698,
+      "is_watertight": true,
+      "max_extent_m": 0.057,
+      "extents_xyz_m": [
+        0.057,
+        0.036,
+        0.003
+      ],
+      "bounds_min_xyz_m": [
+        -0.0285,
+        -0.013,
+        0.0165
+      ],
+      "bounds_max_xyz_m": [
+        0.0285,
+        0.023,
+        0.0195
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "upper_leg_left.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/upper_leg_left.stl",
+      "num_vertices": 6123,
+      "num_faces": 12250,
+      "is_watertight": true,
+      "max_extent_m": 0.060997,
+      "extents_xyz_m": [
+        0.028,
+        0.047659,
+        0.060997
+      ],
+      "bounds_min_xyz_m": [
+        0.0425,
+        -0.013467,
+        -0.012197
+      ],
+      "bounds_max_xyz_m": [
+        0.0705,
+        0.034192,
+        0.048799
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "upper_leg_right.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/upper_leg_right.stl",
+      "num_vertices": 6123,
+      "num_faces": 12250,
+      "is_watertight": true,
+      "max_extent_m": 0.060997,
+      "extents_xyz_m": [
+        0.028,
+        0.047659,
+        0.060997
+      ],
+      "bounds_min_xyz_m": [
+        -0.0705,
+        -0.013467,
+        -0.012197
+      ],
+      "bounds_max_xyz_m": [
+        -0.0425,
+        0.034192,
+        0.048799
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "upper_leg_rigidity_plate.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/upper_leg_rigidity_plate.stl",
+      "num_vertices": 1784,
+      "num_faces": 3600,
+      "is_watertight": true,
+      "max_extent_m": 0.058058,
+      "extents_xyz_m": [
+        0.001,
+        0.044996,
+        0.058058
+      ],
+      "bounds_min_xyz_m": [
+        0.0425,
+        -0.012,
+        -0.010999
+      ],
+      "bounds_max_xyz_m": [
+        0.0435,
+        0.032996,
+        0.047059
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "xl330.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/xl330.stl",
+      "num_vertices": 2057,
+      "num_faces": 4126,
+      "is_watertight": true,
+      "max_extent_m": 0.034,
+      "extents_xyz_m": [
+        0.029,
+        0.02,
+        0.034
+      ],
+      "bounds_min_xyz_m": [
+        -0.0145,
+        -0.01,
+        -0.0245
+      ],
+      "bounds_max_xyz_m": [
+        0.0145,
+        0.01,
+        0.0095
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "yaw2roll.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/yaw2roll.stl",
+      "num_vertices": 6186,
+      "num_faces": 12404,
+      "is_watertight": true,
+      "max_extent_m": 0.0258,
+      "extents_xyz_m": [
+        0.023,
+        0.0258,
+        0.0205
+      ],
+      "bounds_min_xyz_m": [
+        0.006,
+        -0.0133,
+        -0.005
+      ],
+      "bounds_max_xyz_m": [
+        0.029,
+        0.0125,
+        0.0155
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "yaw_roll_motion.stl",
+      "path": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/assets/yaw_roll_motion.stl",
+      "num_vertices": 2887,
+      "num_faces": 5814,
+      "is_watertight": true,
+      "max_extent_m": 0.0359,
+      "extents_xyz_m": [
+        0.034,
+        0.0359,
+        0.0225
+      ],
+      "bounds_min_xyz_m": [
+        -0.0245,
+        -0.018,
+        -0.0045
+      ],
+      "bounds_max_xyz_m": [
+        0.0095,
+        0.0179,
+        0.018
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    }
+  ],
+  "terrain_meshes": [
+    {
+      "file": "microduck_beak_bumper_bracket.stl",
+      "path": "/home/dhp01/microduck_rl/01_freecad_cad/exports/microduck_beak_bumper_bracket.stl",
+      "num_vertices": 20,
+      "num_faces": 36,
+      "is_watertight": false,
+      "max_extent_m": 0.056,
+      "extents_xyz_m": [
+        0.032,
+        0.056,
+        0.014
+      ],
+      "bounds_min_xyz_m": [
+        -0.016,
+        -0.028,
+        0.0
+      ],
+      "bounds_max_xyz_m": [
+        0.016,
+        0.028,
+        0.014
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "nc_high_stairs_course.stl",
+      "path": "/home/dhp01/microduck_rl/01_freecad_cad/exports/nc_high_stairs_course.stl",
+      "num_vertices": 68,
+      "num_faces": 144,
+      "is_watertight": false,
+      "max_extent_m": 2.28,
+      "extents_xyz_m": [
+        2.28,
+        0.5,
+        0.1125
+      ],
+      "bounds_min_xyz_m": [
+        0.3,
+        -0.25,
+        0.0
+      ],
+      "bounds_max_xyz_m": [
+        2.58,
+        0.25,
+        0.1125
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "step_over_hurdles.stl",
+      "path": "/home/dhp01/microduck_rl/01_freecad_cad/exports/step_over_hurdles.stl",
+      "num_vertices": 24,
+      "num_faces": 36,
+      "is_watertight": true,
+      "max_extent_m": 1.04,
+      "extents_xyz_m": [
+        1.04,
+        0.5,
+        0.035
+      ],
+      "bounds_min_xyz_m": [
+        0.48,
+        -0.25,
+        0.0
+      ],
+      "bounds_max_xyz_m": [
+        1.52,
+        0.25,
+        0.035
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    },
+    {
+      "file": "vision_see_and_walk_course.stl",
+      "path": "/home/dhp01/microduck_rl/01_freecad_cad/exports/vision_see_and_walk_course.stl",
+      "num_vertices": 72,
+      "num_faces": 120,
+      "is_watertight": false,
+      "max_extent_m": 0.785,
+      "extents_xyz_m": [
+        0.785,
+        0.5,
+        0.17
+      ],
+      "bounds_min_xyz_m": [
+        0.135,
+        -0.25,
+        0.0
+      ],
+      "bounds_max_xyz_m": [
+        0.92,
+        0.25,
+        0.17
+      ],
+      "scale_valid_meters": true,
+      "up_axis": "Z",
+      "meters_per_unit": 1.0
+    }
+  ]
+}

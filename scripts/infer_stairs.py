@@ -994,68 +994,112 @@ class StandupRecoveryManager:
 
 
 class TerminalInput:
-    """Non-blocking keyboard reader on stdin (cbreak mode, background thread)."""
+    """Non-blocking keyboard reader on stdin and /dev/tty (cbreak mode, background thread)."""
 
     _ARROWS = {"A": "up", "B": "down", "C": "right", "D": "left"}
+    _VN_MAP = {
+        "ư": "w", "ứ": "w", "ừ": "w", "ử": "w", "ữ": "w", "ự": "w",
+        "ă": "a", "ắ": "a", "ằ": "a", "ẳ": "a", "ẵ": "a", "ặ": "a",
+        "â": "a", "ấ": "a", "ầ": "a", "ẩ": "a", "ẫ": "a", "ậ": "a",
+        "á": "a", "à": "a", "ả": "a", "ã": "a", "ạ": "a",
+        "đ": "d",
+        "ê": "e", "ế": "e", "ề": "e", "ể": "e", "ễ": "e", "ệ": "e",
+        "é": "e", "è": "e", "ẻ": "e", "ẽ": "e", "ẹ": "e",
+        "ô": "o", "ố": "o", "ồ": "o", "ổ": "o", "ỗ": "o", "ộ": "o",
+        "ơ": "o", "ớ": "o", "ờ": "o", "ở": "o", "ỡ": "o", "ợ": "o",
+        "ó": "o", "ò": "o", "ỏ": "o", "õ": "o", "ọ": "o",
+    }
 
     def __init__(self):
         self._queue: queue.Queue[str] = queue.Queue()
-        self.enabled = sys.stdin.isatty()
-        self._fd = sys.stdin.fileno() if self.enabled else -1
-        self._old_attrs = None
+        self._fds: list[int] = []
+        self._tty_fd: int | None = None
+        self._old_attrs: dict[int, Any] = {}
+        self.enabled = False
         self._stop = threading.Event()
 
     def __enter__(self):
-        if not self.enabled:
-            return self
+        # 1. Try sys.stdin if it is a TTY
+        if sys.stdin is not None and sys.stdin.isatty():
+            try:
+                fd = sys.stdin.fileno()
+                self._fds.append(fd)
+            except Exception:
+                pass
+        # 2. Also open /dev/tty directly if not already same fd (bypasses uv run stdin wrappers)
         try:
-            self._old_attrs = termios.tcgetattr(self._fd)
-            new_attrs = termios.tcgetattr(self._fd)
-            new_attrs[3] = new_attrs[3] & ~(termios.ICANON | termios.ECHO)
-            new_attrs[6][termios.VMIN] = 0
-            new_attrs[6][termios.VTIME] = 0
-            termios.tcsetattr(self._fd, termios.TCSANOW, new_attrs)
-            threading.Thread(target=self._reader, daemon=True).start()
+            tty_fd = os.open("/dev/tty", os.O_RDONLY | os.O_NONBLOCK)
+            if not self._fds or os.path.sameopenfile(tty_fd, self._fds[0]) is False:
+                self._tty_fd = tty_fd
+                self._fds.append(tty_fd)
+            else:
+                os.close(tty_fd)
         except Exception:
-            self.enabled = False
+            pass
+
+        for fd in list(self._fds):
+            try:
+                self._old_attrs[fd] = termios.tcgetattr(fd)
+                new_attrs = termios.tcgetattr(fd)
+                new_attrs[3] = new_attrs[3] & ~(termios.ICANON | termios.ECHO)
+                new_attrs[6][termios.VMIN] = 1
+                new_attrs[6][termios.VTIME] = 0
+                termios.tcsetattr(fd, termios.TCSANOW, new_attrs)
+                self.enabled = True
+            except Exception:
+                pass
+
+        if self.enabled:
+            threading.Thread(target=self._reader, daemon=True).start()
         return self
 
     def __exit__(self, *exc):
         self._stop.set()
-        if self._old_attrs is not None and self.enabled:
+        for fd, attrs in self._old_attrs.items():
             try:
-                termios.tcsetattr(self._fd, termios.TCSADRAIN, self._old_attrs)
+                termios.tcsetattr(fd, termios.TCSADRAIN, attrs)
+            except Exception:
+                pass
+        if self._tty_fd is not None:
+            try:
+                os.close(self._tty_fd)
             except Exception:
                 pass
 
     def _reader(self):
         while not self._stop.is_set():
             try:
-                r, _, _ = select.select([self._fd], [], [], 0.02)
+                r, _, _ = select.select(self._fds, [], [], 0.02)
                 if not r or self._stop.is_set():
                     continue
-                data = os.read(self._fd, 128)
-                if not data:
-                    continue
-                text = data.decode(errors="ignore")
-                i = 0
-                n = len(text)
-                while i < n:
-                    if text[i] == "\x1b":
-                        if i + 2 < n and text[i + 1] in ("[", "O") and text[i + 2] in self._ARROWS:
-                            self._queue.put(self._ARROWS[text[i + 2]])
-                            i += 3
-                        else:
+                for fd in r:
+                    try:
+                        data = os.read(fd, 128)
+                    except (OSError, ValueError):
+                        continue
+                    if not data:
+                        continue
+                    text = data.decode("utf-8", errors="ignore")
+                    i = 0
+                    n = len(text)
+                    while i < n:
+                        if text[i] == "\x1b":
+                            if i + 2 < n and text[i + 1] in ("[", "O") and text[i + 2] in self._ARROWS:
+                                self._queue.put(self._ARROWS[text[i + 2]])
+                                i += 3
+                            else:
+                                i += 1
+                        elif text[i] in ("\x7f", "\x08"):
+                            self._queue.put("backspace")
                             i += 1
-                    else:
-                        ch = text[i]
-                        if ch.isalpha():
-                            self._queue.put(ch.lower())
-                        elif ch in (" ", "\n", "\r"):
-                            self._queue.put(" ")
                         else:
-                            self._queue.put(ch)
-                        i += 1
+                            ch = text[i].lower()
+                            ch = self._VN_MAP.get(ch, ch)
+                            if ch in (" ", "\n", "\r"):
+                                self._queue.put(" ")
+                            else:
+                                self._queue.put(ch)
+                            i += 1
             except Exception:
                 break
 
@@ -1072,11 +1116,95 @@ class TerminalInput:
         self._queue.put(key)
 
 
+class InViewerPiPCamera:
+    """Renders the robot's head/eye camera directly inside the MuJoCo viewer top-right corner."""
+
+    def __init__(self, model: mujoco.MjModel, width: int = 240, height: int = 160, enabled: bool = True):
+        self.model = model
+        self.width = width
+        self.height = height
+        self.enabled = enabled
+        self.renderer = None
+        self.cam = None
+        self.head_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "jaw_soft")
+        if self.head_bid < 0:
+            self.head_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "head_assembly")
+        self.trunk_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "trunk_base")
+        if self.enabled:
+            try:
+                self.renderer = mujoco.Renderer(model, height=height, width=width)
+                self.cam = mujoco.MjvCamera()
+                self.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+            except Exception as e:
+                print(f"[PiP Camera] Offscreen renderer unavailable ({e}), disabling PiP inset.")
+                self.enabled = False
+
+    def update_and_draw(self, data: mujoco.MjData, viewer_ctx: Any) -> None:
+        if not self.enabled or self.renderer is None or self.cam is None:
+            if hasattr(viewer_ctx, "clear_images"):
+                try:
+                    viewer_ctx.clear_images()
+                except Exception:
+                    pass
+            return
+        if not hasattr(viewer_ctx, "set_images") or not hasattr(viewer_ctx, "viewport"):
+            return
+
+        try:
+            if self.head_bid >= 0:
+                head_pos = data.xpos[self.head_bid]
+                head_rot = data.xmat[self.head_bid].reshape(3, 3)
+                head_fwd = -head_rot[:, 2]
+                head_up = head_rot[:, 0]
+                cam_pos = head_pos + head_fwd * 0.08 + head_up * 0.015
+                head_yaw_deg = math.degrees(math.atan2(head_fwd[1], head_fwd[0]))
+                gaze_target = cam_pos + head_fwd * 0.60 - head_up * 0.18
+            else:
+                robot_pos = data.qpos[:3]
+                cam_pos = robot_pos + np.array([0.08, 0.0, 0.16])
+                head_yaw_deg = 0.0
+                gaze_target = cam_pos + np.array([0.60, 0.0, -0.18])
+
+            self.cam.lookat = [float(gaze_target[0]), float(gaze_target[1]), float(gaze_target[2])]
+            self.cam.distance = 0.55
+            self.cam.elevation = -20.0
+            self.cam.azimuth = head_yaw_deg
+
+            self.renderer.update_scene(data, self.cam)
+            rgb = self.renderer.render().copy()
+
+            # Draw sleek border & center crosshair directly in numpy (zero PIL overhead)
+            h, w, _ = rgb.shape
+            ch, cw = h // 2, w // 2
+            # Crosshair
+            rgb[ch, max(0, cw - 10):max(0, cw - 3)] = [0, 240, 255]
+            rgb[ch, min(w, cw + 4):min(w, cw + 11)] = [0, 240, 255]
+            rgb[max(0, ch - 10):max(0, ch - 3), cw] = [0, 240, 255]
+            rgb[min(h, ch + 4):min(h, ch + 11), cw] = [0, 240, 255]
+            # Border (2px cyan-slate)
+            rgb[:2, :] = [14, 165, 233]
+            rgb[-2:, :] = [14, 165, 233]
+            rgb[:, :2] = [14, 165, 233]
+            rgb[:, -2:] = [14, 165, 233]
+
+            vp = viewer_ctx.viewport
+            left = max(0, int(vp.width) - w - 14)
+            bottom = max(0, int(vp.height) - h - 14)
+            rect = mujoco.MjrRect(left, bottom, w, h)
+            viewer_ctx.set_images([(rect, rgb)])
+        except Exception:
+            pass
+
+
 def parse_args():
     default_walking = (
-        "stairs_climb.onnx"
-        if os.path.exists("stairs_climb.onnx")
-        else ("walking.onnx" if os.path.exists("walking.onnx") else None)
+        "rough_latest.onnx"
+        if os.path.exists("rough_latest.onnx")
+        else (
+            "stairs_climb.onnx"
+            if os.path.exists("stairs_climb.onnx")
+            else ("walking.onnx" if os.path.exists("walking.onnx") else None)
+        )
     )
     default_standing = "standing.onnx" if os.path.exists("standing.onnx") else None
     default_standup = "standup.onnx" if os.path.exists("standup.onnx") else None
@@ -1178,6 +1306,12 @@ def parse_args():
         "--no-focus",
         action="store_true",
         help="Disable autonomous summit focus navigation and corridor edge guard (manual steering only)",
+    )
+    parser.add_argument(
+        "--hud",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Display the embedded PiP Robot Eye Camera in the top-right corner of the viewer (default: True)",
     )
     return parser.parse_args()
 
@@ -1297,95 +1431,134 @@ def run_simulation(args) -> int:
     print(f" Summit Focus Nav: {'ENABLED (Target: [2.34, 0.00, 0.11]m)' if focus_navigator.enabled else 'DISABLED'}")
     if duration_s is not None:
         print(f" Duration: {duration_s:.1f}s (target: {int(duration_s / CONTROL_DT)} steps)")
-    print(" Controls:")
-    print("   UP / DOWN   : Forward / Backward speed (+/- 0.05 m/s)")
-    print("   LEFT / RIGHT: Strafe Left / Right (+/- 0.02 m/s)")
-    print("   A / E       : Turn Left / Right (+/- 0.10 rad/s)")
-    print("   [ / ]       : Stair Clearance Boost - / + 0.2x")
-    print("   O           : Toggle Obstacle Height Probing Mode")
-    print("   SPACE       : Stop (zero all velocities)")
-    print("   F           : Toggle Summit Focus / Auto-Navigation (Default: ON)")
-    print("   B           : Toggle Body Pitch Trim Mode (UP/DOWN trims pitch +/- 2°)")
-    print("   H           : Toggle Head Gaze Mode (tilt beak pitch down)")
-    print("   C           : Toggle Heading Lock")
-    print("   P           : Apply Lateral Perturbation Push")
-    print("   U           : Standup Recovery Trigger")
-    print("   T           : Toggle Policy Inference (pause/resume)")
-    print("   Q           : Quit Cleanly")
-    print("   1..5        : Jump to Spawn Presets (1=bottom, 2=flight1, ... 5=top)")
+    print(" Controls (work in BOTH Terminal and 3D Viewer Window):")
+    print("   UP / W / I     : Walk Forward / Speed up (+0.05 m/s)")
+    print("   DOWN / S / K   : Slow down / Walk Backward (-0.05 m/s)")
+    print("   LEFT / A / J   : Turn Left (+0.15 rad/s)")
+    print("   RIGHT / D / L  : Turn Right (-0.15 rad/s)")
+    print("   , / .          : Strafe Left / Right (+/- 0.03 m/s)")
+    print("   [ / ]          : Stair Clearance Boost - / + 0.2x")
+    print("   O              : Toggle Obstacle Height Probing Mode")
+    print("   SPACE          : Stop (zero all velocities)")
+    print("   BACKSPACE / 0  : Reset robot to bottom of stairs")
+    print("   F              : Toggle Summit Focus / Auto-Navigation (Default: ON)")
+    print("   V              : Toggle In-Viewer PiP Robot Eye Camera HUD (Default: ON)")
+    print("   B              : Toggle Body Pitch Trim Mode (UP/DOWN trims pitch +/- 2°)")
+    print("   H              : Toggle Head Gaze Mode (tilt beak pitch down)")
+    print("   C              : Toggle Heading Lock")
+    print("   P              : Apply Lateral Perturbation Push")
+    print("   U              : Standup Recovery Trigger")
+    print("   T              : Toggle Policy Inference (pause/resume)")
+    print("   Q              : Quit Cleanly")
+    print("   1..5           : Jump to Spawn Presets (1=bottom, 2=flight1, ... 5=top)")
     print("=================================================================")
+
+    use_viewer = (not args.headless) and HAS_MUJOCO_VIEWER
+    pip_camera = InViewerPiPCamera(model, width=240, height=160, enabled=(use_viewer and getattr(args, "hud", True)))
+    last_key_info = "NONE"
 
     def handle_command_key(k: str) -> None:
         nonlocal cmd_twist, cmd_head, cmd_body, pitch_trim_mode, head_gaze_mode
         nonlocal heading_lock_mode, target_yaw, policy_active, current_preset, quit_requested
-        nonlocal focus_navigator, step_booster, standup_mgr
+        nonlocal focus_navigator, step_booster, standup_mgr, last_key_info
 
-        if k == "up":
+        last_key_info = k.upper()
+        if k in ("up", "w", "i"):
             if pitch_trim_mode:
                 cmd_body[4] = float(np.clip(cmd_body[4] + math.radians(2), -math.radians(30), math.radians(30)))
-                print(f"[TRIM] Pitch trim -> {math.degrees(cmd_body[4]):+.1f}°")
+                print(f"🎮 [TRIM] Pitch trim -> {math.degrees(cmd_body[4]):+.1f}°")
             else:
-                cmd_twist[0] = float(np.clip(cmd_twist[0] + 0.05, -0.25, 0.35))
+                if cmd_twist[0] < 0.05:
+                    cmd_twist[0] = 0.12
+                else:
+                    cmd_twist[0] = float(np.clip(cmd_twist[0] + 0.05, -0.25, 0.35))
                 focus_state = "ON" if focus_navigator.enabled else "OFF"
-                print(f"[CMD] vx -> {cmd_twist[0]:+.2f} m/s (Summit Focus: {focus_state})")
-        elif k == "down":
+                print(f"🎮 [CMD: TIẾN] vx={cmd_twist[0]:+.2f} m/s, vy={cmd_twist[1]:+.2f}, wz={cmd_twist[2]:+.2f} (Focus: {focus_state})")
+        elif k in ("down", "s", "k"):
             if pitch_trim_mode:
                 cmd_body[4] = float(np.clip(cmd_body[4] - math.radians(2), -math.radians(30), math.radians(30)))
-                print(f"[TRIM] Pitch trim -> {math.degrees(cmd_body[4]):+.1f}°")
+                print(f"🎮 [TRIM] Pitch trim -> {math.degrees(cmd_body[4]):+.1f}°")
             else:
-                cmd_twist[0] = float(np.clip(cmd_twist[0] - 0.05, -0.25, 0.35))
-                print(f"[CMD] vx -> {cmd_twist[0]:+.2f} m/s")
-        elif k == "left":
-            cmd_twist[1] = float(np.clip(cmd_twist[1] + 0.02, -0.20, 0.20))
-            print(f"[CMD] vy -> {cmd_twist[1]:+.2f} m/s")
-        elif k == "right":
-            cmd_twist[1] = float(np.clip(cmd_twist[1] - 0.02, -0.20, 0.20))
-            print(f"[CMD] vy -> {cmd_twist[1]:+.2f} m/s")
-        elif k in ("a", "left"):
-            cmd_twist[2] = float(np.clip(cmd_twist[2] + 0.10, -0.80, 0.80))
-            print(f"[CMD] wz -> {cmd_twist[2]:+.2f} rad/s")
-        elif k in ("e", "right"):
-            cmd_twist[2] = float(np.clip(cmd_twist[2] - 0.10, -0.80, 0.80))
-            print(f"[CMD] wz -> {cmd_twist[2]:+.2f} rad/s")
-        elif k == "[":
+                cmd_twist[0] = float(np.clip(cmd_twist[0] - 0.06, -0.25, 0.35))
+                if cmd_twist[0] <= 0.0 and focus_navigator.enabled:
+                    focus_navigator.enabled = False
+                    print("🎮 [MANUAL] Chuyển sang Lái Thủ Công để đi lùi (Bấm F để bật lại Auto-Focus)")
+                print(f"🎮 [CMD: LÙI/GIẢM TỐC] vx={cmd_twist[0]:+.2f} m/s, vy={cmd_twist[1]:+.2f}, wz={cmd_twist[2]:+.2f}")
+        elif k in ("left", "a", "j"):
+            if focus_navigator.enabled:
+                focus_navigator.enabled = False
+                print("🎮 [MANUAL] Bàn phím can thiệp -> Tắt tự lái Summit Focus, trao toàn quyền rẽ trái/phải (Bấm F để bật lại)")
+            if abs(cmd_twist[0]) < 0.04:
+                cmd_twist[0] = 0.08
+            cmd_twist[2] = float(np.clip(cmd_twist[2] + 0.15, -0.80, 0.80))
+            print(f"🎮 [CMD: RẼ TRÁI] vx={cmd_twist[0]:+.2f} m/s, wz={cmd_twist[2]:+.2f} rad/s")
+        elif k in ("right", "d", "e", "l"):
+            if focus_navigator.enabled:
+                focus_navigator.enabled = False
+                print("🎮 [MANUAL] Bàn phím can thiệp -> Tắt tự lái Summit Focus, trao toàn quyền rẽ trái/phải (Bấm F để bật lại)")
+            if abs(cmd_twist[0]) < 0.04:
+                cmd_twist[0] = 0.08
+            cmd_twist[2] = float(np.clip(cmd_twist[2] - 0.15, -0.80, 0.80))
+            print(f"🎮 [CMD: RẼ PHẢI] vx={cmd_twist[0]:+.2f} m/s, wz={cmd_twist[2]:+.2f} rad/s")
+        elif k == ",":
+            if focus_navigator.enabled:
+                focus_navigator.enabled = False
+            cmd_twist[1] = float(np.clip(cmd_twist[1] + 0.03, -0.20, 0.20))
+            print(f"🎮 [CMD: BƯỚC NGANG TRÁI] vy={cmd_twist[1]:+.2f} m/s")
+        elif k == ".":
+            if focus_navigator.enabled:
+                focus_navigator.enabled = False
+            cmd_twist[1] = float(np.clip(cmd_twist[1] - 0.03, -0.20, 0.20))
+            print(f"🎮 [CMD: BƯỚC NGANG PHẢI] vy={cmd_twist[1]:+.2f} m/s")
+        elif k in ("[", "-"):
             step_booster.boost_level = float(np.clip(step_booster.boost_level - 0.2, 0.0, 2.0))
-            print(f"[BOOST] Stair clearance boost factor -> {step_booster.boost_level:.1f}x")
-        elif k == "]":
+            print(f"🎮 [BOOST] Stair clearance boost factor -> {step_booster.boost_level:.1f}x")
+        elif k in ("]", "=", "+"):
             step_booster.boost_level = float(np.clip(step_booster.boost_level + 0.2, 0.0, 2.0))
-            print(f"[BOOST] Stair clearance boost factor -> {step_booster.boost_level:.1f}x")
+            print(f"🎮 [BOOST] Stair clearance boost factor -> {step_booster.boost_level:.1f}x")
         elif k == "o":
             step_booster.auto_probe = not step_booster.auto_probe
             state_str = "ON (Adaptive Obstacle Height Probing)" if step_booster.auto_probe else "OFF (Manual)"
-            print(f"[MODE] Obstacle Height Probing: {state_str}")
+            print(f"🎮 [MODE] Obstacle Height Probing: {state_str}")
+        elif k == "v":
+            pip_camera.enabled = not pip_camera.enabled
+            print(f"📷 [PiP CAMERA] Khung camera mắt robot góc trên phải: {'BẬT (ON)' if pip_camera.enabled else 'TẮT (OFF)'}")
         elif k == " ":
             cmd_twist[:] = 0.0
             focus_navigator.summit_reached = False
-            print("[CMD] Zero velocity (emergency stop)")
+            print("🛑 [CMD: DỪNG] Zero velocity (Robot đứng giữ thăng bằng)")
+        elif k in ("backspace", "0"):
+            cmd_twist[:] = 0.0
+            focus_navigator.summit_reached = False
+            reset_to_preset(model, data, "bottom", bam_ctrl=bam_ctrl)
+            print("🔄 [RESET] Đã đưa robot về lại vị trí xuất phát chân cầu thang!")
         elif k == "f":
             focus_navigator.enabled = not focus_navigator.enabled
+            if focus_navigator.enabled and cmd_twist[0] < 0.08:
+                cmd_twist[0] = 0.20
             state_str = "ON (Auto-Steer & Corridor Edge Guard)" if focus_navigator.enabled else "OFF (Manual Steering)"
-            print(f"[MODE] Summit Focus Navigation: {state_str}")
+            print(f"🎯 [MODE] Summit Focus Navigation: {state_str}")
         elif k == "b":
             pitch_trim_mode = not pitch_trim_mode
-            print(f"[MODE] Body Pitch Trim: {'ON (UP/DOWN trims angle)' if pitch_trim_mode else 'OFF'}")
+            print(f"🎮 [MODE] Body Pitch Trim: {'ON (UP/DOWN trims angle)' if pitch_trim_mode else 'OFF'}")
         elif k == "h":
             head_gaze_mode = not head_gaze_mode
             cmd_head[1] = -math.radians(20) if head_gaze_mode else 0.0
-            print(f"[MODE] Head Gaze: {'LOOKING DOWN (-20°)' if head_gaze_mode else 'FORWARD (0°)'}")
+            print(f"🎮 [MODE] Head Gaze: {'LOOKING DOWN (-20°)' if head_gaze_mode else 'FORWARD (0°)'}")
         elif k == "c":
             heading_lock_mode = not heading_lock_mode
             target_yaw = compute_euler_angles(data.qpos[3:7])[2] if heading_lock_mode else None
             state_str = f"ON (locked at {math.degrees(target_yaw):.1f}°)" if heading_lock_mode else "OFF"
-            print(f"[MODE] Heading Lock: {state_str}")
+            print(f"🎮 [MODE] Heading Lock: {state_str}")
         elif k == "p":
             push = (np.random.rand(3) - 0.5) * 0.5
             data.qvel[:3] += push
-            print(f"[PUSH] Perturbation push applied: [{push[0]:+.2f}, {push[1]:+.2f}, {push[2]:+.2f}] m/s")
+            print(f"💥 [PUSH] Perturbation push applied: [{push[0]:+.2f}, {push[1]:+.2f}, {push[2]:+.2f}] m/s")
         elif k == "u":
             if standup_session is not None:
                 standup_mgr.trigger(current_vx=cmd_twist[0], force=True)
             else:
-                print("[RECOVERY] Standup recovery triggered (kinematic fallback)!")
+                print("🎮 [RECOVERY] Standup recovery triggered (kinematic fallback)!")
                 cmd_body[2] = 0.02  # elevate CoM
                 cmd_body[4] = -math.radians(10)  # lean forward
                 if abs(data.qpos[2]) < 0.08:
@@ -1393,18 +1566,17 @@ def run_simulation(args) -> int:
                     data.qvel[:] = 0.0
         elif k == "t":
             policy_active = not policy_active
-            print(f"[POLICY] Inference {'RESUMED' if policy_active else 'PAUSED (Holding target)'}")
+            print(f"🎮 [POLICY] Inference {'RESUMED' if policy_active else 'PAUSED (Holding target)'}")
         elif k == "q":
-            print("[EXIT] Quit requested by user.")
+            print("👋 [EXIT] Quit requested by user.")
             quit_requested = True
         elif k in HOTKEY_PRESETS:
             current_preset = HOTKEY_PRESETS[k]
-            print(f"[SPAWN] Preset {k} -> {current_preset}")
+            print(f"📍 [SPAWN] Preset {k} -> {current_preset}")
             reset_to_preset(model, data, current_preset, bam_ctrl=bam_ctrl)
 
     def viewer_key_callback(keycode: int):
-        # Map GLFW keys to actions
-        char = chr(keycode).lower() if 32 <= keycode <= 126 else ""
+        # Map GLFW keys from 3D viewer window directly into command queue
         if keycode == 265:
             term_in.put_key("up")
         elif keycode == 264:
@@ -1413,29 +1585,31 @@ def run_simulation(args) -> int:
             term_in.put_key("left")
         elif keycode == 262:
             term_in.put_key("right")
-        elif keycode == 91 or char == "[":
-            term_in.put_key("[")
-        elif keycode == 93 or char == "]":
-            term_in.put_key("]")
-        elif char in ("w", "s", "a", "d", "e", "b", "h", "c", "p", "u", "t", "q", "f", "o", " ", "1", "2", "3", "4", "5", "[", "]"):
-            if char == "w":
-                term_in.put_key("up")
-            elif char == "s":
-                term_in.put_key("down")
-            elif char == "d":
-                term_in.put_key("e")
-            else:
-                term_in.put_key(char)
+        elif keycode in (259, 261):  # Backspace / Delete
+            term_in.put_key("backspace")
+        elif keycode in (257, 335):  # Enter / KP_Enter
+            term_in.put_key("up")
+        elif 32 <= keycode <= 126:
+            char = chr(keycode).lower()
+            term_in.put_key(char)
 
-    use_viewer = (not args.headless) and HAS_MUJOCO_VIEWER
+    # When launched interactively in terminal without explicit --vx/--lin-vel-x, auto-start smooth climb (0.24 m/s)
+    if use_viewer and abs(cmd_twist[0]) < 1e-5 and ("--lin-vel-x" not in sys.argv and "--vx" not in sys.argv):
+        cmd_twist[0] = 0.24
+        print("[AUTO-CRUISE] Interactive terminal launch detected: starting smooth autonomous climb at vx=+0.24 m/s (SPACE to pause, Arrow/WASD/IJKL to steer).")
+
     viewer_ctx = mujoco.viewer.launch_passive(
         model, data, show_left_ui=False, show_right_ui=False, key_callback=viewer_key_callback
     ) if use_viewer else _HeadlessViewer()
 
+    summit_hold_timer = 0.0
+    frame_drop_count = 0
+
     with TerminalInput() as term_in, viewer_ctx as viewer_context:
-        # Simulation loop
-        last_step_clock = time.time()
+        # Simulation loop with monotonic drift-free frame pacer
+        next_step_clock = time.perf_counter()
         while True:
+            step_start_clock = time.perf_counter()
             if quit_requested:
                 break
             if duration_s is not None and sim_time >= duration_s:
@@ -1487,9 +1661,21 @@ def run_simulation(args) -> int:
             else:
                 effective_twist = working_twist
 
-            if nav_info.get("arrived", False) and abs(cmd_twist[0]) > 0.001:
-                print(f"[{sim_time:5.2f}s] [SUMMIT] Microduck reached summit platform! Holding standing balance.")
-                cmd_twist[:] = 0.0
+            if nav_info.get("arrived", False):
+                if abs(cmd_twist[0]) > 0.001:
+                    print(f"[{sim_time:5.2f}s] [SUMMIT] Microduck reached summit platform! Holding standing balance.")
+                    cmd_twist[:] = 0.0
+                    summit_hold_timer = 0.0
+                elif use_viewer:
+                    summit_hold_timer += CONTROL_DT
+                    if summit_hold_timer >= 2.5:
+                        print(f"[{sim_time:5.2f}s] [AUTO-LOOP] Summit hold complete -> looping smoothly back to bottom!")
+                        focus_navigator.summit_reached = False
+                        summit_hold_timer = 0.0
+                        reset_to_preset(model, data, "bottom", bam_ctrl=bam_ctrl)
+                        cmd_twist[:] = [0.24, 0.0, 0.0]
+            else:
+                summit_hold_timer = 0.0
 
             # State-dependent policy selection & command shaping
             on_stairs = (data.qpos[0] >= 0.25)
@@ -1557,6 +1743,7 @@ def run_simulation(args) -> int:
 
             sim_time += CONTROL_DT
             step_count += 1
+            step_compute_ms = (time.perf_counter() - step_start_clock) * 1000.0
 
             # Check NaN guard
             if np.isnan(data.qpos).any() or np.isnan(data.qvel).any():
@@ -1577,17 +1764,17 @@ def run_simulation(args) -> int:
                     f"[{sim_time:5.2f}s] [{policy_tag:9s}] pos:[{p[0]:.2f}, {p[1]:.2f}, {p[2]:.2f}] | "
                     f"tilt: P:{telem['pitch_deg']:+5.1f}° R:{telem['roll_deg']:+5.1f}° [{telem['status']:8s}] | "
                     f"[{probe_tag}] | "
-                    f"Nav: [{nav_info['status']}] D:{nav_info['dist']:.2f}m Lat:{nav_info['lat_dev']:+.2f}m HeadErr:{nav_info['heading_err_deg']:+.1f}° | "
-                    f"{telem['zone']}"
+                    f"Nav: [{nav_info['status']}] D:{nav_info['dist']:.2f}m Lat:{nav_info['lat_dev']:+.2f}m | "
+                    f"{telem['zone']} | 50Hz ({step_compute_ms:.2f}ms, Drops:{frame_drop_count})"
                 )
 
-                # In-Viewer HUD Overlay
+                # In-Viewer HUD Overlay (throttled to telemetry_hz to eliminate GLFW string-render stalls)
                 if viewer_context is not None and hasattr(viewer_context, "set_texts"):
                     hud_l = (
-                        f"Step: {step_count} | Sim: {sim_time:.2f}s | Policy: [{policy_tag}]\n"
+                        f"Step: {step_count} | Sim: {sim_time:.2f}s | Policy: [{policy_tag}] | Key: [{last_key_info}]\n"
                         f"Pos: [{p[0]:.2f}, {p[1]:.2f}, {p[2]:.2f}] | Zone: {telem['zone']}\n"
                         f"Tilt: P:{telem['pitch_deg']:+.1f}° R:{telem['roll_deg']:+.1f}° | [{telem['status']}]\n"
-                        f"Probe: [{obs_info['status']}] (Toggle: O, Level: [ / ])"
+                        f"Probe: [{obs_info['status']}] (Toggle: O, Level: [ / ], PiP: V)"
                     )
                     hud_r = (
                         f"Nav: [{nav_info['status']}] | Dist: {nav_info['dist']:.2f}m\n"
@@ -1601,17 +1788,23 @@ def run_simulation(args) -> int:
                     except Exception:
                         pass
 
+            # Decoupled Viewer Sync (syncs smoothly on every 2nd control step in interactive mode to prevent D3D12/GLFW stalls)
             if viewer_context is not None:
-                if getattr(viewer_context, "user_scn", None) is not None:
-                    viewer_context.user_scn.ngeom = 0
-                    focus_overlay.draw(data, viewer_context.user_scn, nav_info)
-                viewer_context.sync()
-                # Frame pacing for 50 Hz viewer sync
-                elapsed = time.time() - last_step_clock
-                sleep_time = CONTROL_DT - elapsed
-                if sleep_time > 0.001:
+                if (not use_viewer) or (step_count % 2 == 0):
+                    if getattr(viewer_context, "user_scn", None) is not None:
+                        viewer_context.user_scn.ngeom = 0
+                        focus_overlay.draw(data, viewer_context.user_scn, nav_info)
+                    if use_viewer and (step_count % 4 == 0):
+                        pip_camera.update_and_draw(data, viewer_context)
+                    viewer_context.sync()
+                next_step_clock += CONTROL_DT
+                now_clock = time.perf_counter()
+                sleep_time = next_step_clock - now_clock
+                if sleep_time > 0.0005:
                     time.sleep(sleep_time)
-                last_step_clock = time.time()
+                elif sleep_time < -CONTROL_DT:
+                    # Resync clock without spiraling if OS window manager paused
+                    next_step_clock = now_clock
 
     print(f"[infer_stairs] Finished {step_count} steps with 0 NaNs and clean exit.")
     return 0

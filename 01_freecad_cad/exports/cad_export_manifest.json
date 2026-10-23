@@ -1,0 +1,677 @@
+{
+  "stage": "Stage A - FreeCAD / Argon Parametric CAD",
+  "generated_at": "2026-10-23T15:22:44.182887+00:00",
+  "units": "meters",
+  "up_axis": "Z",
+  "backend": {
+    "freecadcmd_binary": null,
+    "freecad_python_module": false,
+    "active_engine": "argon_csg_step_trimesh"
+  },
+  "models": {
+    "nc_high_stairs_course": {
+      "description": "3-flight progressive staircase matching High Stairs RL Curriculum (2.0cm -> 2.75cm -> 3.5cm risers) with intermediate landings and summit platform.",
+      "num_primitives": 12,
+      "num_vertices": 96,
+      "num_faces": 144,
+      "is_watertight": true,
+      "volume_m3": 0.0756,
+      "bounds_min_xyz_m": [
+        0.3,
+        -0.25,
+        0.0
+      ],
+      "bounds_max_xyz_m": [
+        2.58,
+        0.25,
+        0.1125
+      ],
+      "step_engine": "argon_iso10303_ap214",
+      "files": {
+        "step": "/home/dhp01/microduck_rl/01_freecad_cad/exports/nc_high_stairs_course.step",
+        "stl": "/home/dhp01/microduck_rl/01_freecad_cad/exports/nc_high_stairs_course.stl",
+        "obj": "/home/dhp01/microduck_rl/01_freecad_cad/exports/nc_high_stairs_course.obj"
+      },
+      "primitives": [
+        {
+          "name": "stair_1_1",
+          "center_xyz": [
+            0.36,
+            0.0,
+            0.005
+          ],
+          "extents_xyz": [
+            0.12,
+            0.5,
+            0.01
+          ],
+          "category": "stair_step",
+          "rgba": [
+            0.32,
+            0.48,
+            0.65,
+            1.0
+          ]
+        },
+        {
+          "name": "stair_1_2",
+          "center_xyz": [
+            0.48,
+            0.0,
+            0.01
+          ],
+          "extents_xyz": [
+            0.12,
+            0.5,
+            0.02
+          ],
+          "category": "stair_step",
+          "rgba": [
+            0.32,
+            0.48,
+            0.65,
+            1.0
+          ]
+        },
+        {
+          "name": "stair_1_3",
+          "center_xyz": [
+            0.6,
+            0.0,
+            0.015
+          ],
+          "extents_xyz": [
+            0.12,
+            0.5,
+            0.03
+          ],
+          "category": "stair_step",
+          "rgba": [
+            0.32,
+            0.48,
+            0.65,
+            1.0
+          ]
+        },
+        {
+          "name": "landing_1",
+          "center_xyz": [
+            0.84,
+            0.0,
+            0.015
+          ],
+          "extents_xyz": [
+            0.36,
+            0.5,
+            0.03
+          ],
+          "category": "landing_platform",
+          "rgba": [
+            0.22,
+            0.62,
+            0.42,
+            1.0
+          ]
+        },
+        {
+          "name": "stair_2_1",
+          "center_xyz": [
+            1.08,
+            0.0,
+            0.02125
+          ],
+          "extents_xyz": [
+            0.12,
+            0.5,
+            0.0425
+          ],
+          "category": "stair_step",
+          "rgba": [
+            0.68,
+            0.52,
+            0.26,
+            1.0
+          ]
+        },
+        {
+          "name": "stair_2_2",
+          "center_xyz": [
+            1.2,
+            0.0,
+            0.0275
+          ],
+          "extents_xyz": [
+            0.12,
+            0.5,
+            0.055
+          ],
+          "category": "stair_step",
+          "rgba": [
+            0.68,
+            0.52,
+            0.26,
+            1.0
+          ]
+        },
+        {
+          "name": "stair_2_3",
+          "center_xyz": [
+            1.32,
+            0.0,
+            0.03375
+          ],
+          "extents_xyz": [
+            0.12,
+            0.5,
+            0.0675
+          ],
+          "category": "stair_step",
+          "rgba": [
+            0.68,
+            0.52,
+            0.26,
+            1.0
+          ]
+        },
+        {
+          "name": "landing_2",
+          "center_xyz": [
+            1.56,
+            0.0,
+            0.03375
+          ],
+          "extents_xyz": [
+            0.36,
+            0.5,
+            0.0675
+          ],
+          "category": "landing_platform",
+          "rgba": [
+            0.22,
+            0.62,
+            0.42,
+            1.0
+          ]
+        },
+        {
+          "name": "stair_3_1",
+          "center_xyz": [
+            1.8,
+            0.0,
+            0.04125
+          ],
+          "extents_xyz": [
+            0.12,
+            0.5,
+            0.0825
+          ],
+          "category": "stair_step",
+          "rgba": [
+            0.78,
+            0.34,
+            0.26,
+            1.0
+          ]
+        },
+        {
+          "name": "stair_3_2",
+          "center_xyz": [
+            1.92,
+            0.0,
+            0.04875
+          ],
+          "extents_xyz": [
+            0.12,
+            0.5,
+            0.0975
+          ],
+          "category": "stair_step",
+          "rgba": [
+            0.78,
+            0.34,
+            0.26,
+            1.0
+          ]
+        },
+        {
+          "name": "stair_3_3",
+          "center_xyz": [
+            2.04,
+            0.0,
+            0.05625
+          ],
+          "extents_xyz": [
+            0.12,
+            0.5,
+            0.1125
+          ],
+          "category": "stair_step",
+          "rgba": [
+            0.78,
+            0.34,
+            0.26,
+            1.0
+          ]
+        },
+        {
+          "name": "landing_3",
+          "center_xyz": [
+            2.34,
+            0.0,
+            0.05625
+          ],
+          "extents_xyz": [
+            0.48,
+            0.5,
+            0.1125
+          ],
+          "category": "landing_platform",
+          "rgba": [
+            0.22,
+            0.62,
+            0.42,
+            1.0
+          ]
+        }
+      ]
+    },
+    "step_over_hurdles": {
+      "description": "Parametric step-over obstacle bars for testing swing-foot clearance (3.5cm to 5.5cm) and GaitPhaseLatch transitions.",
+      "num_primitives": 3,
+      "num_vertices": 24,
+      "num_faces": 36,
+      "is_watertight": true,
+      "volume_m3": 0.0017,
+      "bounds_min_xyz_m": [
+        0.48,
+        -0.25,
+        0.0
+      ],
+      "bounds_max_xyz_m": [
+        1.52,
+        0.25,
+        0.035
+      ],
+      "step_engine": "argon_iso10303_ap214",
+      "files": {
+        "step": "/home/dhp01/microduck_rl/01_freecad_cad/exports/step_over_hurdles.step",
+        "stl": "/home/dhp01/microduck_rl/01_freecad_cad/exports/step_over_hurdles.stl",
+        "obj": "/home/dhp01/microduck_rl/01_freecad_cad/exports/step_over_hurdles.obj"
+      },
+      "primitives": [
+        {
+          "name": "hurdle_20mm",
+          "center_xyz": [
+            0.5,
+            0.0,
+            0.01
+          ],
+          "extents_xyz": [
+            0.04,
+            0.5,
+            0.02
+          ],
+          "category": "hurdle_obstacle",
+          "rgba": [
+            0.82,
+            0.42,
+            0.18,
+            1.0
+          ]
+        },
+        {
+          "name": "hurdle_30mm",
+          "center_xyz": [
+            1.0,
+            0.0,
+            0.015
+          ],
+          "extents_xyz": [
+            0.04,
+            0.5,
+            0.03
+          ],
+          "category": "hurdle_obstacle",
+          "rgba": [
+            0.82,
+            0.42,
+            0.18,
+            1.0
+          ]
+        },
+        {
+          "name": "hurdle_35mm",
+          "center_xyz": [
+            1.5,
+            0.0,
+            0.0175
+          ],
+          "extents_xyz": [
+            0.04,
+            0.5,
+            0.035
+          ],
+          "category": "hurdle_obstacle",
+          "rgba": [
+            0.82,
+            0.42,
+            0.18,
+            1.0
+          ]
+        }
+      ]
+    },
+    "microduck_beak_bumper_bracket": {
+      "description": "Parametric mechanical attachment (protective sensor/beak bumper bracket) for Microduck head/trunk.",
+      "num_primitives": 3,
+      "num_vertices": 24,
+      "num_faces": 36,
+      "is_watertight": true,
+      "volume_m3": 5e-06,
+      "bounds_min_xyz_m": [
+        -0.016,
+        -0.028,
+        0.0
+      ],
+      "bounds_max_xyz_m": [
+        0.016,
+        0.028,
+        0.014
+      ],
+      "step_engine": "argon_iso10303_ap214",
+      "files": {
+        "step": "/home/dhp01/microduck_rl/01_freecad_cad/exports/microduck_beak_bumper_bracket.step",
+        "stl": "/home/dhp01/microduck_rl/01_freecad_cad/exports/microduck_beak_bumper_bracket.stl",
+        "obj": "/home/dhp01/microduck_rl/01_freecad_cad/exports/microduck_beak_bumper_bracket.obj"
+      },
+      "primitives": [
+        {
+          "name": "bracket_front_bumper",
+          "center_xyz": [
+            0.0145,
+            0.0,
+            0.007
+          ],
+          "extents_xyz": [
+            0.003,
+            0.056,
+            0.014
+          ],
+          "category": "robot_attachment",
+          "rgba": [
+            0.2,
+            0.25,
+            0.3,
+            1.0
+          ]
+        },
+        {
+          "name": "bracket_left_arm",
+          "center_xyz": [
+            0.0,
+            0.0265,
+            0.007
+          ],
+          "extents_xyz": [
+            0.032,
+            0.003,
+            0.014
+          ],
+          "category": "robot_attachment",
+          "rgba": [
+            0.2,
+            0.25,
+            0.3,
+            1.0
+          ]
+        },
+        {
+          "name": "bracket_right_arm",
+          "center_xyz": [
+            0.0,
+            -0.0265,
+            0.007
+          ],
+          "extents_xyz": [
+            0.032,
+            0.003,
+            0.014
+          ],
+          "category": "robot_attachment",
+          "rgba": [
+            0.2,
+            0.25,
+            0.3,
+            1.0
+          ]
+        }
+      ]
+    },
+    "vision_see_and_walk_course": {
+      "description": "Hermes 4-Zone Vision-Guided Rough Terrain & Progressive Staircase Course (3D Cobblestone Field + Slalom Pylons -> 3-Step Progressive Staircase [8mm, 16mm, 24mm] -> Summit Platform & Emerald Goal Beacon).",
+      "num_primitives": 10,
+      "num_vertices": 80,
+      "num_faces": 120,
+      "is_watertight": true,
+      "volume_m3": 0.007316,
+      "bounds_min_xyz_m": [
+        0.135,
+        -0.25,
+        0.0
+      ],
+      "bounds_max_xyz_m": [
+        0.92,
+        0.25,
+        0.17
+      ],
+      "step_engine": "argon_iso10303_ap214",
+      "files": {
+        "step": "/home/dhp01/microduck_rl/01_freecad_cad/exports/vision_see_and_walk_course.step",
+        "stl": "/home/dhp01/microduck_rl/01_freecad_cad/exports/vision_see_and_walk_course.stl",
+        "obj": "/home/dhp01/microduck_rl/01_freecad_cad/exports/vision_see_and_walk_course.obj"
+      },
+      "primitives": [
+        {
+          "name": "cobble_1_entrance",
+          "center_xyz": [
+            0.16,
+            0.0,
+            0.00125
+          ],
+          "extents_xyz": [
+            0.05,
+            0.44,
+            0.0025
+          ],
+          "category": "rough_cobble",
+          "rgba": [
+            0.55,
+            0.42,
+            0.3,
+            1.0
+          ]
+        },
+        {
+          "name": "cobble_2_ridge",
+          "center_xyz": [
+            0.22,
+            0.0,
+            0.00225
+          ],
+          "extents_xyz": [
+            0.06,
+            0.44,
+            0.0045
+          ],
+          "category": "rough_cobble",
+          "rgba": [
+            0.68,
+            0.38,
+            0.24,
+            1.0
+          ]
+        },
+        {
+          "name": "cobble_3_high",
+          "center_xyz": [
+            0.28,
+            0.0,
+            0.003
+          ],
+          "extents_xyz": [
+            0.06,
+            0.44,
+            0.006
+          ],
+          "category": "rough_cobble",
+          "rgba": [
+            0.62,
+            0.35,
+            0.22,
+            1.0
+          ]
+        },
+        {
+          "name": "cobble_4_exit",
+          "center_xyz": [
+            0.34,
+            0.0,
+            0.0025
+          ],
+          "extents_xyz": [
+            0.06,
+            0.44,
+            0.005
+          ],
+          "category": "rough_cobble",
+          "rgba": [
+            0.55,
+            0.42,
+            0.3,
+            1.0
+          ]
+        },
+        {
+          "name": "pylon_1_red_left",
+          "center_xyz": [
+            0.22,
+            0.135,
+            0.055
+          ],
+          "extents_xyz": [
+            0.036,
+            0.036,
+            0.11
+          ],
+          "category": "visual_pylon_red",
+          "rgba": [
+            0.95,
+            0.15,
+            0.15,
+            1.0
+          ]
+        },
+        {
+          "name": "pylon_2_orange_right",
+          "center_xyz": [
+            0.32,
+            -0.135,
+            0.055
+          ],
+          "extents_xyz": [
+            0.036,
+            0.036,
+            0.11
+          ],
+          "category": "visual_pylon_orange",
+          "rgba": [
+            0.98,
+            0.52,
+            0.1,
+            1.0
+          ]
+        },
+        {
+          "name": "stair_1_yellow_step10mm",
+          "center_xyz": [
+            0.46,
+            0.0,
+            0.005
+          ],
+          "extents_xyz": [
+            0.12,
+            0.5,
+            0.01
+          ],
+          "category": "stair_step_yellow",
+          "rgba": [
+            0.96,
+            0.84,
+            0.12,
+            1.0
+          ]
+        },
+        {
+          "name": "stair_2_gold_step20mm",
+          "center_xyz": [
+            0.58,
+            0.0,
+            0.01
+          ],
+          "extents_xyz": [
+            0.12,
+            0.5,
+            0.02
+          ],
+          "category": "stair_step_gold",
+          "rgba": [
+            0.92,
+            0.68,
+            0.14,
+            1.0
+          ]
+        },
+        {
+          "name": "stair_3_summit_30mm",
+          "center_xyz": [
+            0.78,
+            0.0,
+            0.015
+          ],
+          "extents_xyz": [
+            0.28,
+            0.5,
+            0.03
+          ],
+          "category": "summit_platform_blue",
+          "rgba": [
+            0.24,
+            0.52,
+            0.78,
+            1.0
+          ]
+        },
+        {
+          "name": "goal_5_beacon_green",
+          "center_xyz": [
+            0.88,
+            0.0,
+            0.1
+          ],
+          "extents_xyz": [
+            0.045,
+            0.09,
+            0.14
+          ],
+          "category": "visual_goal_green",
+          "rgba": [
+            0.1,
+            0.92,
+            0.28,
+            1.0
+          ]
+        }
+      ]
+    }
+  }
+}

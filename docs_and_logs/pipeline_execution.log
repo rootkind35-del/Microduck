@@ -1,0 +1,49 @@
+=== ARGON SIM-TO-REAL PIPELINE EXECUTION (2026-10-23T08:33:08.398865+00:00) ===
+Requested stage: all
+[STAGE A: CAD] Completed via argon_csg_step_trimesh | Models exported (.STEP, .STL, .OBJ): ['nc_high_stairs_course', 'step_over_hurdles', 'microduck_beak_bumper_bracket']
+[STAGE B: BLENDER & OPENUSD] Completed | Robot STLs=43, Terrain STLs=3, Links=15, 14-Servos Match=True | Generated microduck.urdf, microduck_simready.usda, terrain_course.usda
+[STAGE C: NEWTON / ISAAC LAB / WARP RL] Completed | 61D Obs Contract=False, Stairs Curriculum Aligned=True, Physics Scene Step NaN-Free=True
+=== PIPELINE FINISHED IN 7.877s ===
+
+=== ARGON SIM-TO-REAL PIPELINE EXECUTION (2026-10-23T08:34:54.916603+00:00) ===
+Requested stage: all
+[STAGE A: CAD] Completed via argon_csg_step_trimesh | Models exported (.STEP, .STL, .OBJ): ['nc_high_stairs_course', 'step_over_hurdles', 'microduck_beak_bumper_bracket']
+[STAGE B: BLENDER & OPENUSD] Completed | Robot STLs=43, Terrain STLs=3, Links=15, 14-Servos Match=True | Generated microduck.urdf, microduck_simready.usda, terrain_course.usda
+[STAGE C: NEWTON / ISAAC LAB / WARP RL] Completed | 61D Obs Contract=True, Stairs Curriculum Aligned=True, Physics Scene Step NaN-Free=True
+=== PIPELINE FINISHED IN 9.999s ===
+
+=== ARGON SIM-TO-REAL PIPELINE EXECUTION (2026-10-23T08:48:48.899528+00:00) ===
+Requested stage: all
+[STAGE A: CAD] Completed via argon_csg_step_trimesh | Models exported (.STEP, .STL, .OBJ): ['nc_high_stairs_course', 'step_over_hurdles', 'microduck_beak_bumper_bracket']
+[STAGE B: BLENDER & OPENUSD] Completed | Robot STLs=43, Terrain STLs=3, Links=15, 14-Servos Match=True | Generated microduck.urdf, microduck_simready.usda, terrain_course.usda
+[STAGE C: NEWTON / ISAAC LAB / WARP RL] Completed | 61D Obs Contract=True, Stairs Curriculum Aligned=True, Physics Scene Step NaN-Free=True
+=== PIPELINE FINISHED IN 8.381s ===
+
+=== ARGON SIM-TO-REAL PIPELINE EXECUTION (2026-10-23T09:06:14.574706+00:00) ===
+Requested stage: all
+[STAGE A: CAD] Completed via argon_csg_step_trimesh | Models exported (.STEP, .STL, .OBJ): ['nc_high_stairs_course', 'step_over_hurdles', 'microduck_beak_bumper_bracket']
+[STAGE B: BLENDER & OPENUSD] Completed | Robot STLs=43, Terrain STLs=3, Links=15, 14-Servos Match=True | Generated microduck.urdf, microduck_simready.usda, terrain_course.usda
+[STAGE C: NEWTON / ISAAC LAB / WARP RL] Completed | 61D Obs=True, CAD Rollout (5.0s): dx=-0.043m, dz=-90.3mm, Survived=False | GPU Rollout (16 envs): survival=87.5%, Exported ONNX=/home/dhp01/microduck_rl/docs_and_logs/argon_verified_stairs_policy.onnx
+=== PIPELINE FINISHED IN 41.981s ===
+
+=== ARGON SIM-TO-REAL PIPELINE EXECUTION (2026-10-23T09:12:21.880534+00:00) ===
+Requested stage: all
+[STAGE A: CAD] Completed via argon_csg_step_trimesh | Models exported (.STEP, .STL, .OBJ): ['nc_high_stairs_course', 'step_over_hurdles', 'microduck_beak_bumper_bracket']
+[STAGE B: BLENDER & OPENUSD] Completed | Robot STLs=43, Terrain STLs=3, Links=15, 14-Servos Match=True | Generated microduck.urdf, microduck_simready.usda, terrain_course.usda
+[STAGE C: NEWTON / ISAAC LAB / WARP RL] Completed | 61D Obs=True, CAD Rollout (5.0s): dx=+0.009m, dz=-10.8mm, Survived=True | GPU Rollout (16 envs): survival=100.0%, Exported ONNX=/home/dhp01/microduck_rl/docs_and_logs/argon_verified_stairs_policy.onnx
+=== PIPELINE FINISHED IN 33.472s ===
+
+=== ARGON SIM-TO-REAL PIPELINE EXECUTION (2026-10-23T09:18:20.718343+00:00) ===
+Requested stage: all
+[STAGE A: CAD] Completed via argon_csg_step_trimesh | Models exported (.STEP, .STL, .OBJ): ['nc_high_stairs_course', 'step_over_hurdles', 'microduck_beak_bumper_bracket']
+[STAGE B: BLENDER & OPENUSD] Completed | Robot STLs=43, Terrain STLs=3, Links=15, 14-Servos Match=True | Generated microduck.urdf, microduck_simready.usda, terrain_course.usda
+[STAGE C: NEWTON / ISAAC LAB / WARP RL] Completed | 61D Obs=True, CAD Rollout (5.0s): dx=+0.220m, dz=+4.2mm, Survived=True | GPU Rollout (16 envs): survival=93.8%, Exported ONNX=/home/dhp01/microduck_rl/docs_and_logs/argon_verified_stairs_policy.onnx
+=== PIPELINE FINISHED IN 38.01s ===
+
+=== ARGON SIM-TO-REAL PIPELINE EXECUTION (2026-10-23T09:31:10.030551+00:00) ===
+Requested stage: all
+[STAGE A: CAD] Completed via argon_csg_step_trimesh | Models exported (.STEP, .STL, .OBJ): ['nc_high_stairs_course', 'step_over_hurdles', 'microduck_beak_bumper_bracket']
+[STAGE B: BLENDER & OPENUSD] Completed | Robot STLs=43, Terrain STLs=3, Links=15, 14-Servos Match=True | Generated microduck.urdf, microduck_simready.usda, terrain_course.usda
+[STAGE C: NEWTON / ISAAC LAB / WARP RL] Completed | 61D Obs=True, CAD Rollout (5.0s): dx=+0.220m, dz=+4.2mm, Survived=True | GPU Rollout (16 envs): survival=100.0%, Exported ONNX=/home/dhp01/microduck_rl/docs_and_logs/argon_verified_stairs_policy.onnx
+=== PIPELINE FINISHED IN 39.399s ===
+

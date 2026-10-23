@@ -1,0 +1,142 @@
+<mujoco model="scene_stairs">
+    <include file="robot_groundcontact.xml" />
+
+    <visual>
+        <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0" />
+        <rgba haze="0.15 0.25 0.35 1" />
+        <global azimuth="160" elevation="-20" />
+    </visual>
+
+    <asset>
+        <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072" />
+        <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4"
+            rgb2="0.1 0.2 0.3" markrgb="0.8 0.8 0.8" width="300" height="300" />
+        <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2" />
+
+        <!-- High stairs materials -->
+        <material name="mat_stair_25" rgba="0.32 0.48 0.65 1.0" reflectance="0.2" roughness="0.5" />
+        <material name="mat_landing_1" rgba="0.22 0.62 0.42 1.0" reflectance="0.25" roughness="0.4" />
+        <material name="mat_stair_30" rgba="0.68 0.52 0.26 1.0" reflectance="0.2" roughness="0.5" />
+        <material name="mat_landing_2" rgba="0.18 0.58 0.54 1.0" reflectance="0.25" roughness="0.4" />
+        <material name="mat_stair_35" rgba="0.78 0.34 0.26 1.0" reflectance="0.2" roughness="0.5" />
+        <material name="mat_summit" rgba="0.88 0.72 0.20 1.0" reflectance="0.3" roughness="0.3" />
+        <material name="target_site_mat" rgba="1.0 0.4 0.1 0.7" reflectance="0.5" />
+    </asset>
+
+    <worldbody>
+        <light pos="1.2 0 3.5" dir="0 0 -1" directional="true" />
+        <geom name="floor" size="0 0 0.05" pos="0 0 0" type="plane" material="groundplane" />
+
+        <!-- ================================================================= -->
+        <!-- FLIGHT 1: 2.5cm Risers (x: 0.30m -> 0.66m, Elevation: 0 -> 7.5cm) -->
+        <!-- ================================================================= -->
+        <geom name="stair_1_1" type="box" pos="0.36 0 0.0125" size="0.06 0.25 0.0125"
+              material="mat_stair_25" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <geom name="stair_1_2" type="box" pos="0.48 0 0.0250" size="0.06 0.25 0.0250"
+              material="mat_stair_25" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <geom name="stair_1_3" type="box" pos="0.60 0 0.0375" size="0.06 0.25 0.0375"
+              material="mat_stair_25" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+
+        <!-- LANDING PLATFORM 1: (x: 0.66m -> 1.02m, Height: 7.5cm) -->
+        <geom name="landing_1" type="box" pos="0.84 0 0.0375" size="0.18 0.25 0.0375"
+              material="mat_landing_1" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <site name="site_landing_1" pos="0.84 0 0.080" type="cylinder" size="0.03 0.005" material="target_site_mat" />
+
+        <!-- ================================================================== -->
+        <!-- FLIGHT 2: 3.0cm Risers (x: 1.02m -> 1.38m, Elevation: 7.5cm -> 16.5cm) -->
+        <!-- ================================================================== -->
+        <geom name="stair_2_1" type="box" pos="1.08 0 0.0525" size="0.06 0.25 0.0525"
+              material="mat_stair_30" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <geom name="stair_2_2" type="box" pos="1.20 0 0.0675" size="0.06 0.25 0.0675"
+              material="mat_stair_30" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <geom name="stair_2_3" type="box" pos="1.32 0 0.0825" size="0.06 0.25 0.0825"
+              material="mat_stair_30" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+
+        <!-- LANDING PLATFORM 2: (x: 1.38m -> 1.74m, Height: 16.5cm) -->
+        <geom name="landing_2" type="box" pos="1.56 0 0.0825" size="0.18 0.25 0.0825"
+              material="mat_landing_2" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <site name="site_landing_2" pos="1.56 0 0.170" type="cylinder" size="0.03 0.005" material="target_site_mat" />
+
+        <!-- ================================================================== -->
+        <!-- FLIGHT 3: 3.5cm Risers (x: 1.74m -> 2.10m, Elevation: 16.5cm -> 27.0cm) -->
+        <!-- ================================================================== -->
+        <geom name="stair_3_1" type="box" pos="1.80 0 0.1000" size="0.06 0.25 0.1000"
+              material="mat_stair_35" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <geom name="stair_3_2" type="box" pos="1.92 0 0.1175" size="0.06 0.25 0.1175"
+              material="mat_stair_35" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <geom name="stair_3_3" type="box" pos="2.04 0 0.1350" size="0.06 0.25 0.1350"
+              material="mat_stair_35" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+
+        <!-- TOP SUMMIT PLATFORM: (x: 2.10m -> 2.58m, Height: 27.0cm) -->
+        <geom name="landing_summit" type="box" pos="2.34 0 0.1350" size="0.24 0.25 0.1350"
+              material="mat_summit" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <site name="site_summit" pos="2.34 0 0.275" type="cylinder" size="0.04 0.005" material="target_site_mat" />
+    </worldbody>
+
+    <keyframe>
+        <key name="INIT" qpos="0 0 0.12 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0" ctrl="0 0 0 0 0 0 0 0 0 0 0 0 0 0" />
+        <key name="STAND" qpos="
+            0 0 0.125 1 0 0 0
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984"
+            ctrl="
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984" />
+        <key name="SPAWN_STAIRS_25" qpos="
+            0.48 0 0.175 1 0 0 0
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984"
+            ctrl="
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984" />
+        <key name="SPAWN_LANDING_1" qpos="
+            0.84 0 0.200 1 0 0 0
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984"
+            ctrl="
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984" />
+        <key name="SPAWN_STAIRS_30" qpos="
+            1.20 0 0.260 1 0 0 0
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984"
+            ctrl="
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984" />
+        <key name="SPAWN_LANDING_2" qpos="
+            1.56 0 0.290 1 0 0 0
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984"
+            ctrl="
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984" />
+        <key name="SPAWN_STAIRS_35" qpos="
+            1.92 0 0.360 1 0 0 0
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984"
+            ctrl="
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984" />
+        <key name="SPAWN_SUMMIT" qpos="
+            2.34 0 0.395 1 0 0 0
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984"
+            ctrl="
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984" />
+    </keyframe>
+</mujoco>

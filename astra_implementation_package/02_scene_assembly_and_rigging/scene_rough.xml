@@ -1,0 +1,118 @@
+<mujoco model="scene_rough">
+    <include file="robot_groundcontact.xml" />
+
+    <visual>
+        <headlight diffuse="0.72 0.74 0.78" ambient="0.34 0.36 0.40" specular="0.35 0.35 0.40" />
+        <quality shadowsize="4096" offsamples="4" />
+        <map znear="0.01" zfar="25.0" force="0.1" fogstart="4.0" fogend="14.0" />
+        <rgba haze="0.10 0.16 0.24 1" />
+        <global azimuth="145" elevation="-22" offwidth="1280" offheight="720" />
+    </visual>
+
+    <asset>
+        <texture type="skybox" builtin="gradient" rgb1="0.16 0.28 0.44" rgb2="0.03 0.05 0.10" width="512" height="3072" />
+        <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.18 0.22 0.28" rgb2="0.12 0.15 0.20" markrgb="0.42 0.52 0.64" width="512" height="512" />
+        <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="6 6" reflectance="0.16" specular="0.25" shininess="0.4" />
+        <material name="mat_cobble_low" rgba="0.36 0.52 0.46 1.0" reflectance="0.12" specular="0.30" shininess="0.5" roughness="0.5"/>
+        <material name="mat_cobble_mid" rgba="0.62 0.48 0.34 1.0" reflectance="0.14" specular="0.35" shininess="0.5" roughness="0.5"/>
+        <material name="mat_cobble_high" rgba="0.76 0.40 0.26 1.0" reflectance="0.16" specular="0.40" shininess="0.6" roughness="0.4"/>
+        <material name="mat_ramp" rgba="0.26 0.62 0.52 1.0" reflectance="0.20" specular="0.40" roughness="0.4"/>
+        <material name="mat_step" rgba="0.78 0.56 0.28 1.0" reflectance="0.22" specular="0.45" roughness="0.4"/>
+        <material name="mat_rail_glow" rgba="0.12 0.78 0.96 0.85" emission="0.35" specular="0.6" />
+        <material name="mat_finish_gold" rgba="0.96 0.78 0.18 0.90" emission="0.25" specular="0.7" />
+    </asset>
+
+    <worldbody>
+        <light name="studio_key" pos="0.8 -0.9 2.4" dir="-0.25 0.35 -0.90" diffuse="0.80 0.78 0.74" specular="0.40 0.40 0.40" directional="true" castshadow="true" />
+        <light name="studio_fill" pos="0.6 1.0 2.0" dir="-0.15 -0.40 -0.90" diffuse="0.38 0.44 0.54" specular="0.15 0.15 0.20" directional="true" castshadow="false" />
+        <camera name="overview_track" pos="-0.28 -0.82 0.48" xyaxes="0.82 -0.57 0.0 0.24 0.35 0.90" fovy="50" />
+        <geom name="floor" size="0 0 0.05" pos="0 0 0" type="plane" material="groundplane" />
+        <!-- Architectural LED Corridor Guide Rails & Summit Finish Gate (Visual Sites: 0 collision overhead) -->
+        <site name="rail_left_led" type="box" pos="0.80 0.32 0.008" size="0.76 0.006 0.006" material="mat_rail_glow" />
+        <site name="rail_right_led" type="box" pos="0.80 -0.32 0.008" size="0.76 0.006 0.006" material="mat_rail_glow" />
+        <site name="finish_gate_left" type="cylinder" pos="1.52 0.30 0.09" size="0.012 0.09" material="mat_finish_gold" />
+        <site name="finish_gate_right" type="cylinder" pos="1.52 -0.30 0.09" size="0.012 0.09" material="mat_finish_gold" />
+        <site name="finish_gate_arch" type="box" pos="1.52 0.0 0.18" size="0.012 0.31 0.010" material="mat_finish_gold" />
+
+        <!-- ================================================================= -->
+        <!-- 1. SÀN ĐÁ CUỘI GỒ GHỀ (COBBLESTONE MÂP MÔ 0.4cm - 1.0cm)          -->
+        <!-- Ngay lối đi thẳng phía trước robot (x: 0.16m -> 1.45m, y: -0.30 -> 0.30) -->
+        <!-- ================================================================= -->
+        <!-- Bậc chuyển tiếp nhẹ (entrance transition 2mm) giúp chân bước mượt từ sàn phẳng lên -->
+        <geom name="cobble_entrance" type="box" pos="0.160 0.000 0.0010" size="0.020 0.300 0.0010" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1"/>
+
+        <!-- Hàng 1 (x=0.24m): Bậc đệm nâng cao 3.5mm -->
+        <geom name="cobble_0" type="box" pos="0.240 -0.240 0.0018" size="0.060 0.060 0.0018" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_1" type="box" pos="0.240 -0.120 0.0020" size="0.060 0.060 0.0020" material="mat_cobble_high" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_2" type="box" pos="0.240 0.000 0.0018" size="0.060 0.060 0.0018" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_3" type="box" pos="0.240 0.120 0.0020" size="0.060 0.060 0.0020" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_4" type="box" pos="0.240 0.240 0.0018" size="0.060 0.060 0.0018" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+
+        <!-- Các hàng tiếp theo (x=0.36m đến 1.32m): Kích thước 0.060 khít nhau loại bỏ rãnh nứt -->
+        <geom name="cobble_5" type="box" pos="0.360 -0.240 0.0025" size="0.060 0.060 0.0025" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_6" type="box" pos="0.360 -0.120 0.0022" size="0.060 0.060 0.0022" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_7" type="box" pos="0.360 0.000 0.0046" size="0.060 0.060 0.0046" material="mat_cobble_high" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_8" type="box" pos="0.360 0.120 0.0038" size="0.060 0.060 0.0038" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_9" type="box" pos="0.360 0.240 0.0041" size="0.060 0.060 0.0041" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_10" type="box" pos="0.480 -0.240 0.0021" size="0.060 0.060 0.0021" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_11" type="box" pos="0.480 -0.120 0.0049" size="0.060 0.060 0.0049" material="mat_cobble_high" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_12" type="box" pos="0.480 0.000 0.0045" size="0.060 0.060 0.0045" material="mat_cobble_high" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_13" type="box" pos="0.480 0.120 0.0026" size="0.060 0.060 0.0026" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_14" type="box" pos="0.480 0.240 0.0025" size="0.060 0.060 0.0025" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_15" type="box" pos="0.600 -0.240 0.0026" size="0.060 0.060 0.0026" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_16" type="box" pos="0.600 -0.120 0.0029" size="0.060 0.060 0.0029" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_17" type="box" pos="0.600 0.000 0.0036" size="0.060 0.060 0.0036" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_18" type="box" pos="0.600 0.120 0.0033" size="0.060 0.060 0.0033" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_19" type="box" pos="0.600 0.240 0.0029" size="0.060 0.060 0.0029" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_20" type="box" pos="0.720 -0.240 0.0038" size="0.060 0.060 0.0038" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_21" type="box" pos="0.720 -0.120 0.0024" size="0.060 0.060 0.0024" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_22" type="box" pos="0.720 0.000 0.0029" size="0.060 0.060 0.0029" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_23" type="box" pos="0.720 0.120 0.0031" size="0.060 0.060 0.0031" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_24" type="box" pos="0.720 0.240 0.0034" size="0.060 0.060 0.0034" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_25" type="box" pos="0.840 -0.240 0.0044" size="0.060 0.060 0.0044" material="mat_cobble_high" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_26" type="box" pos="0.840 -0.120 0.0026" size="0.060 0.060 0.0026" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_27" type="box" pos="0.840 0.000 0.0035" size="0.060 0.060 0.0035" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_28" type="box" pos="0.840 0.120 0.0038" size="0.060 0.060 0.0038" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_29" type="box" pos="0.840 0.240 0.0021" size="0.060 0.060 0.0021" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_30" type="box" pos="0.960 -0.240 0.0038" size="0.060 0.060 0.0038" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_31" type="box" pos="0.960 -0.120 0.0025" size="0.060 0.060 0.0025" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_32" type="box" pos="0.960 0.000 0.0022" size="0.060 0.060 0.0022" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_33" type="box" pos="0.960 0.120 0.0048" size="0.060 0.060 0.0048" material="mat_cobble_high" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_34" type="box" pos="0.960 0.240 0.0049" size="0.060 0.060 0.0049" material="mat_cobble_high" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_35" type="box" pos="1.080 -0.240 0.0044" size="0.060 0.060 0.0044" material="mat_cobble_high" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_36" type="box" pos="1.080 -0.120 0.0029" size="0.060 0.060 0.0029" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_37" type="box" pos="1.080 0.000 0.0023" size="0.060 0.060 0.0023" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_38" type="box" pos="1.080 0.120 0.0041" size="0.060 0.060 0.0041" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_39" type="box" pos="1.080 0.240 0.0033" size="0.060 0.060 0.0033" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_40" type="box" pos="1.200 -0.240 0.0024" size="0.060 0.060 0.0024" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_41" type="box" pos="1.200 -0.120 0.0035" size="0.060 0.060 0.0035" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_42" type="box" pos="1.200 0.000 0.0021" size="0.060 0.060 0.0021" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_43" type="box" pos="1.200 0.120 0.0047" size="0.060 0.060 0.0047" material="mat_cobble_high" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_44" type="box" pos="1.200 0.240 0.0028" size="0.060 0.060 0.0028" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_45" type="box" pos="1.320 -0.240 0.0040" size="0.060 0.060 0.0040" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_46" type="box" pos="1.320 -0.120 0.0029" size="0.060 0.060 0.0029" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_47" type="box" pos="1.320 0.000 0.0036" size="0.060 0.060 0.0036" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_48" type="box" pos="1.320 0.120 0.0036" size="0.060 0.060 0.0036" material="mat_cobble_mid" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+        <geom name="cobble_49" type="box" pos="1.320 0.240 0.0026" size="0.060 0.060 0.0026" material="mat_cobble_low" condim="3" friction="1.2 0.01 0.001" solref="0.04 1" solimp="0.85 0.95 0.001 0.5 2"/>
+
+        <!-- ================================================================= -->
+        <!-- 2. BẬC THANG THOẢI (MINI STAIRS: bậc đệm 4mm -> 8mm -> 16mm -> 24mm) -->
+        <!-- Bên cánh trái (y: +0.45m)                                         -->
+        <!-- ================================================================= -->
+        <geom name="stair_0" type="box" pos="0.26  0.45 0.002" size="0.06 0.18 0.002" material="mat_step" condim="3" friction="1.2 0.01 0.001" solref="0.04 1"/>
+        <geom name="stair_1" type="box" pos="0.40  0.45 0.004" size="0.07 0.18 0.004" material="mat_step" condim="3" friction="1.2 0.01 0.001" solref="0.04 1"/>
+        <geom name="stair_2" type="box" pos="0.54  0.45 0.008" size="0.07 0.18 0.008" material="mat_step" condim="3" friction="1.2 0.01 0.001" solref="0.04 1"/>
+        <geom name="stair_3" type="box" pos="0.68  0.45 0.012" size="0.07 0.18 0.012" material="mat_step" condim="3" friction="1.2 0.01 0.001" solref="0.04 1"/>
+        <geom name="stair_4" type="box" pos="0.82  0.45 0.016" size="0.07 0.18 0.016" material="mat_step" condim="3" friction="1.2 0.01 0.001" solref="0.04 1"/>
+        <geom name="stair_platform" type="box" pos="1.06 0.45 0.016" size="0.17 0.18 0.016" material="mat_step" condim="3" friction="1.2 0.01 0.001" solref="0.04 1"/>
+
+        <!-- ================================================================= -->
+        <!-- 3. MẶT DỐC THOẢI (SLOPE RAMPS: 4 độ và 7 độ)                      -->
+        <!-- Bên cánh phải (y: -0.45m)                                         -->
+        <!-- ================================================================= -->
+        <!-- Dốc 4 độ (0.0698 rad): dài 50cm, cao ~3.5cm -->
+        <geom name="ramp_4deg" type="box" pos="0.55 -0.45 0.015" euler="0 -0.0698 0" size="0.25 0.18 0.005" material="mat_ramp" condim="3" friction="1.2 0.01 0.001" solref="0.04 1"/>
+        <geom name="ramp_top" type="box" pos="0.95 -0.45 0.032" size="0.15 0.18 0.005" material="mat_ramp" condim="3" friction="1.2 0.01 0.001" solref="0.04 1"/>
+
+    </worldbody>
+</mujoco>
