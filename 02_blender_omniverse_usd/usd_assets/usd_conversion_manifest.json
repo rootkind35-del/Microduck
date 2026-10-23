@@ -1,6 +1,6 @@
 {
   "stage": "Stage B (Part 2) - URDF & Omniverse OpenUSD SimReady Compiler",
-  "generated_at": "2026-10-23T15:22:44.945724+00:00",
+  "generated_at": "2026-10-23T17:47:53.972838+00:00",
   "source_mjcf": "/home/dhp01/microduck_rl/src/mjlab_microduck/robot/microduck/robot_groundcontact.xml",
   "total_links": 15,
   "total_joints": 14,

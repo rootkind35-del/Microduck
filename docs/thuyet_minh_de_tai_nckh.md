@@ -41,14 +41,14 @@ Nghiên cứu, thiết kế và thực chứng thành công khung kiến trúc �
 ## 3. Tổng quan tình hình nghiên cứu liên quan đến đề tài
 - **3.1. Học tăng cường sâu trong điều khiển chuyển động robot có chân (Legged Locomotion DRL)**: Schulman et al. (2017) [PPO], Rudin et al. (2022) [Isaac Gym, POMDP blind locomotion].
 - **3.2. Rào cản chuyển giao mô phỏng vào thực tế (Sim-to-Real Gap) và Mô hình cơ cấu chấp hành**: Hwangbo et al. (2019) [ANYmal, actuator net], Rhoban (BAM M6 Dynamixel XL330).
-- **3.3. Điều phối đa kỹ năng và Sự gián đoạn hành động cơ học**: Peng et al. (2021) [ASE], Merel et al. (2019).
+- **3.3. Điều phối đa kỹ năng và Sự gián đoạn hành động cơ học**: Peng et al. (2022) [ASE], Merel et al. (2019).
 - **3.4. Khoảng trống nghiên cứu (Research Gap)**: Thiếu kiến trúc điều phối đa mô hình thống nhất không sụt áp/giật gián đoạn trên micro-biped; thiếu kỹ năng leo bậc thang hình học cao 14% cơ thể và vượt địa hình sỏi đá có khóa hướng nội sinh.
 
 ---
 
 ## 4. Đối tượng, phạm vi nghiên cứu, cách tiếp cận và phương pháp nghiên cứu
 - **Đối tượng**: PPO Asymmetric Actor-Critic, động lực học bipedal tiếp xúc ma sát, BAM M6 XL330, Quintic Spline $C^2$ và Gait Phase Latch FSM.
-- **Phạm vi**: Robot Microduck (830g, 25cm, 14 DOF), mô phỏng MuJoCo Warp GPU (mjlab), xuất ONNX chuẩn hóa, không chế tạo cơ khí lại khung robot. Thời gian 10/2026 - 04/2027.
+- **Phạm vi**: Robot Microduck (~0.74 kg theo mô hình URDF kiểm định, ~0.8 kg vật lý; 25cm, 14 DOF), mô phỏng MuJoCo Warp GPU (mjlab), xuất ONNX chuẩn hóa, không chế tạo cơ khí lại khung robot. Thời gian 10/2026 - 04/2027.
 - **Cách tiếp cận**: Physics-Informed & Data-Driven Sim-to-Real Approach kết hợp Task Decomposition (Embodied MoE).
 - **Phương pháp**: Nghiên cứu lý thuyết; mô hình hóa toán học & mô phỏng số (MJCF 70 geoms, BAM M6); thực nghiệm song song GPU 4096 envs (DR ma sát, khối lượng, backlash); đo kiểm đối chứng (Ablation Study 100 seeds).
 
@@ -65,7 +65,7 @@ Nghiên cứu, thiết kế và thực chứng thành công khung kiến trúc �
 
 ## 6. Sản phẩm của đề tài
 1. Quyển Báo cáo Tổng kết Đề tài NCKH Sinh viên.
-2. Bộ Mô hình Điều khiển AI (ONNX Policy Bank): rough_latest.onnx (96.8%), stairs_latest.onnx (95.2%), standup.onnx, sitstand.onnx, roulade.onnx.
+2. Bộ Mô hình Điều khiển AI (ONNX Policy Bank): rough_latest.onnx (hoàn thành 100% 2 kịch bản vòng kín: bãi đá cuội 50 khối X→1.614 m và cầu thang 9 bậc X→2.279 m, +119.6 mm, V_min ≥ 6.92 V), stairs expert (curriculum bậc tới 3.5 cm), standup.onnx, sitstand.onnx, roulade.onnx; bộ điều phối Neko Core đạt 96% (24/25) sống sót chuyển tiếp, giảm 99.6% bước nhảy lệnh biên (2.720 → 0.010 rad) — số liệu đối chứng 100 lượt chạy trong `results/neko_core_ablation_summary.json`.
 3. Bộ Mã nguồn Điều phối Phân cấp & Kịch bản Kiểm thử (Neko Core Framework).
 4. 01 Bài báo khoa học (Manuscript Draft).
 5. Hồ sơ kiểm chứng Sim-to-Real sẵn sàng cho daemon robotctl.

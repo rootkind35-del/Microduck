@@ -30,8 +30,12 @@ Never launch a long run without one.
 - `src/mjlab_microduck/tasks/mdp.py` — ALL custom MDP functions (rewards, events,
   observations, commands, curricula). Add new functions here, grouped by task.
 - `src/mjlab_microduck/tasks/microduck_*_env_cfg.py` — one cfg module per task
-  family. `microduck_velocity_env_cfg.py` is the main walking recipe AND the
-  shared base (robot, DR, obs, commands) other envs build on or mirror.
+  family (velocity, velstand, standup, sitstand, ground_pick, ball_kick, fetch,
+  spin, roulade, stairs, roller_*). `microduck_velocity_env_cfg.py` is the main
+  walking recipe AND the shared base (robot, DR, obs, commands) other envs build
+  on or mirror. `microduck_stairs_env_cfg.py` (stairs climbing: 2.5→3.5 cm
+  risers, allcollisions model, terrain curriculum, softened step-edge contacts)
+  is the template for terrain-traversal tasks.
 - `src/mjlab_microduck/tasks/__init__.py` — task registration (base + `-Backlash-` variants).
 - `src/mjlab_microduck/tasks/backlash.py` — wraps any env cfg into its backlash twin.
 - `src/mjlab_microduck/robot/microduck_constants.py` — robot cfgs, HOME frame, BAM actuator cfg.
@@ -46,7 +50,21 @@ Never launch a long run without one.
 - `src/mjlab_microduck/publish/` — `uv run publish`: schema-2 manifest builder + ONNX shape/smoke
   gate + Hub upload. Contract = `docs/policy-manifest.md` in the `microduck` repo; only
   constant-command episodic/perpetual policies are publishable (phase/posture-flag are the set's).
-- `scripts/` — export wrapper, infer, sim2real comparison, wandb helpers.
+- `scripts/` — export wrapper, sim2real comparison, wandb helpers, and:
+  `infer_policy.py` (the multi-policy hot-swap testbed — keyboard switching,
+  heading-lock, terrain auto-slowdown, PiP eye camera; see on-screen help),
+  `infer_stairs.py` / `infer_fetch.py`, `train_rough_sequential.py` (4-task
+  rough-terrain pipeline warm-starting from `logs/rsl_rl/expert_cache/walk_expert.pt`).
+- `train_rough_colab.ipynb`, `notebooks/train_stairs_colab.ipynb` +
+  `scripts/export_colab.py` / `eval_stairs_colab.py` — Google-Colab training
+  path; the same "fresh `uv sync` is ground truth" rules apply.
+- Argon research suite: `01_freecad_cad/` → `02_blender_omniverse_usd/` →
+  `03_newton_isaaclab_rl/`, driven by `run_argon_pipeline.py` / `Makefile`
+  (Neko Core MoE ablation in `scripts/benchmark_neko_core_ablation.py`). This is
+  a parallel CAD→USD→IsaacLab experiment track — NOT the robot deploy path;
+  deployed policies come from `src/mjlab_microduck` only.
+- Much of `docs/` (incl. `rough_terrain_locomotion_and_heading_lock.md`) and
+  `RESEARCH_ROADMAP.md` are in Vietnamese, as are some runtime prints.
 - `tests/` — cfg-invariant and mdp-function regression tests (CPU, no GPU needed).
 
 ## Invariants — do not break these
@@ -90,7 +108,8 @@ Never launch a long run without one.
 ## Building a new env — the workflow
 
 1. **Pick the closest template** and build on it, don't start from scratch:
-   locomotion → the velocity recipe; episodic trick ending in a pose →
+   locomotion → the velocity recipe; terrain traversal with curriculum →
+   stairs; episodic trick ending in a pose →
    standup; commanded two-state → sitstand; dynamic maneuver → roulade
    (read its cfg docstring — it encodes a 5-run lesson arc). Building on
    `make_microduck_velocity*_env_cfg` keeps DR / obs / noise / delays in sync
@@ -110,8 +129,9 @@ Never launch a long run without one.
    the cfg file; factory `make_..._env_cfg(play: bool, rough: bool)`; register
    in `tasks/__init__.py` (+ the `_BACKLASH_TASKS` table if applicable); own
    `RslRl...RunnerCfg` with a distinct `experiment_name`. Symmetry mirror-loss
-   is available (61D table in `symmetry.py`) — OFF by default, never for
-   asymmetric tasks.
+   is available (61D table in `symmetry.py`): ON by default in the velocity /
+   walking cfg (`ENABLE_SYMMETRY = True`, part of the yaw-drift fix) — keep it
+   OFF for asymmetric tasks (spin, sitstand, ground_pick, roller crouch).
 4. **Write cfg tests** (see `tests/test_*_cfg.py`): joint indices resolve on
    the actual model, reward weights have the intended sign, gates open/closed
    where expected. These run on CPU and lock in the invariants.
@@ -186,6 +206,14 @@ Never launch a long run without one.
 - Rare-but-important command regions need explicit buckets — e.g. turn-in-place
   (`rel_turn_in_place_envs`): independent uniform sampling made spinning ~2% of
   experience and it never trained.
+- **The 61D obs has NO absolute world yaw** (only body ang-vel + projected
+  gravity), so straight-line commands drift. Fix it at BOTH layers: training
+  (`heading_hold` + the endogenous `track_heading` potential in the velocity
+  cfg, plus symmetry loss) and runtime closed-loop heading-lock
+  (`infer_policy.py`: ON by default — LEFT/RIGHT steer the locked heading ±10°
+  instead of leaving a persistent yaw-rate command; `--no-heading-lock` or key
+  `c` reverts to legacy). Full write-up:
+  `docs/rough_terrain_locomotion_and_heading_lock.md`.
 
 ## Curricula
 

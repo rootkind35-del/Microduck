@@ -55,8 +55,31 @@ def get_all_checkpoints(log_dir: str) -> list[str]:
     return sorted(files, key=extract_iter)
 
 
+def find_latest_run_dir(base_dir: str = "logs/rsl_rl/stairs_climb") -> str:
+    """Newest run directory that actually contains checkpoints.
+
+    The script previously hard-coded run 2026-10-17_22-40-04, which no longer
+    exists on disk (latest is 2026-10-17_18-09-16 at the time of writing) —
+    discover instead of hard-coding. Override with STAIRS_RUN_DIR.
+    """
+    override = os.environ.get("STAIRS_RUN_DIR")
+    if override:
+        return override
+    candidates = [
+        d for d in glob.glob(os.path.join(base_dir, "*_stairs_climb"))
+        if glob.glob(os.path.join(d, "model_*.pt"))
+    ]
+    if not candidates:
+        raise FileNotFoundError(
+            f"Không tìm thấy run nào chứa model_*.pt trong {base_dir}; "
+            "đặt biến STAIRS_RUN_DIR để chỉ định run cụ thể."
+        )
+    return max(candidates, key=os.path.getmtime)
+
+
 def run_eval():
-    log_dir = "logs/rsl_rl/stairs_climb/2026-10-17_22-40-04_stairs_climb"
+    log_dir = find_latest_run_dir()
+    print(f"Evaluating run directory: {log_dir}")
     checkpoints = get_all_checkpoints(log_dir)
     print(f"Found {len(checkpoints)} checkpoints:")
     for cp in checkpoints:

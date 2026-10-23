@@ -588,10 +588,14 @@ class PolicyInference:
 
         # Velocity command [lin_vel_x, lin_vel_y, ang_vel_z] — controls walking / policy switching
         self.vel_cmd = np.zeros(3, dtype=np.float32)
-        # Closed-loop Heading-Lock & Adaptive Terrain Locomotion (toggled via 'H' key or API)
-        self.heading_lock_enabled = False
+        # Closed-loop Heading-Lock & Adaptive Terrain Locomotion (ON by default:
+        # manual straight walking gets the same absolute-yaw correction as the
+        # autonomous navigation controller; toggle via 'c' key or API)
+        self.heading_lock_enabled = True
         self.target_yaw = None
         self.heading_kp = 2.2
+        # Heading-nudge per LEFT/RIGHT key press while the lock is ON (degrees)
+        self.heading_steer_step = math.radians(10.0)
         self.auto_slowdown_enabled = False
         self.nominal_vel_x = 0.0
         self.nominal_vel_y = 0.0
@@ -783,6 +787,24 @@ class PolicyInference:
         state_str = f"ON (target: {math.degrees(self.target_yaw):.1f}°)" if (self.heading_lock_enabled and self.target_yaw is not None) else ("ON" if self.heading_lock_enabled else "OFF")
         print(f"Heading-Lock: {state_str}")
 
+    def steer_heading(self, delta_rad: float) -> bool:
+        """Nudge the Heading-Lock target heading by delta_rad (left = +).
+
+        Steering is a heading command, not a yaw-rate command: nominal wz stays
+        zero so the closed-loop lock turns the robot to the new heading and
+        immediately resumes straight-line holding — no persistent yaw-rate
+        command left behind to circle the robot. Returns False when the lock
+        is off (caller falls back to a raw yaw-rate command)."""
+        if not self.heading_lock_enabled:
+            return False
+        base = self.target_yaw if self.target_yaw is not None else self.get_current_yaw()
+        self.target_yaw = (base + delta_rad + math.pi) % (2.0 * math.pi) - math.pi
+        self.nominal_vel_ang = 0.0
+        self.vel_cmd[2] = 0.0
+        self._update_command()
+        print(f"Heading steer: {math.degrees(delta_rad):+.0f}° → target {math.degrees(self.target_yaw):.1f}°")
+        return True
+
     def toggle_auto_slowdown(self):
         """Toggle Terrain-Adaptive Auto-Deceleration on/off (V key)."""
         self.auto_slowdown_enabled = not self.auto_slowdown_enabled
@@ -837,7 +859,9 @@ class PolicyInference:
         if self.heading_lock_enabled and self.target_yaw is not None and abs(self.nominal_vel_x) > 0.01 and abs(self.nominal_vel_ang) <= 0.05:
             current_yaw = self.get_current_yaw()
             yaw_err = (self.target_yaw - current_yaw + np.pi) % (2 * np.pi) - np.pi
-            cmd_wz = float(np.clip(self.heading_kp * yaw_err, -0.4, 0.4))
+            # ±0.7 (not ±0.4): strong-drift checkpoints need near-full trained
+            # wz authority (training range ±1.0) to actually hold a straight line
+            cmd_wz = float(np.clip(self.heading_kp * yaw_err, -0.7, 0.7))
             if abs(self.vel_cmd[2] - cmd_wz) > 0.005:
                 self.vel_cmd[2] = cmd_wz
                 changed = True
@@ -2170,6 +2194,8 @@ def main():
                         help="Cruising forward walking speed for goal navigation in m/s (default: 0.08 m/s)")
     parser.add_argument("--navigate", "--goal", dest="navigate", action="store_true",
                         help="Enable autonomous target goal navigation: robot walks from start to destination target")
+    parser.add_argument("--no-heading-lock", dest="heading_lock", action="store_false",
+                        help="Start with closed-loop Heading-Lock OFF (legacy open-loop yaw commands; toggle at runtime with 'c')")
     args = parser.parse_args()
 
     if args.walking and "stairs" in os.path.basename(args.walking).lower() and not args.stairs:
@@ -2299,6 +2325,8 @@ def main():
         roulade_duration=args.roulade_duration,
         standup_duration=args.standup_duration,
     )
+    if not args.heading_lock:
+        policy.heading_lock_enabled = False  # --no-heading-lock: legacy open-loop start
     policy.set_vel_cmd(args.lin_vel_x, args.lin_vel_y, args.ang_vel_z)
 
     # Set realistic wheel bearing friction for roller inference (must be done
@@ -2490,6 +2518,23 @@ def main():
         mujoco.mj_forward(model, data)
         print("🔄 [RESET] Đã đưa robot về lại vị trí xuất phát ban đầu!")
 
+    def steer_walking(direction: float):
+        """Turn while walking: LEFT = +1, RIGHT = -1.
+
+        Heading-Lock ON (default): each press steers the locked target heading
+        by heading_steer_step — the robot turns to the new heading, then holds
+        it laser-straight, exactly like the autonomous navigation controller.
+        Heading-Lock OFF ('c'): legacy behavior, a persistent yaw-rate command
+        that accumulates per press until countered."""
+        if policy.heading_lock_enabled:
+            if abs(policy.nominal_vel_x) < 0.04 and not args.roller:
+                policy.set_vel_cmd(0.08, policy.nominal_vel_y, 0.0)
+            policy.steer_heading(direction * policy.heading_steer_step)
+        else:
+            cur_vx = 0.08 if abs(policy.nominal_vel_x) < 0.04 and not args.roller else policy.nominal_vel_x
+            new_ang = float(np.clip(policy.nominal_vel_ang + direction * policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang))
+            policy.set_vel_cmd(cur_vx, policy.nominal_vel_y, new_ang)
+
     def handle_key(key):
         nonlocal policy_enabled, quit_requested, focus_camera, nav_to_goal, nav_speed, show_pip_hud, last_key_info
         _VN_MAP = {"ư": "w", "đ": "d", "â": "a", "ă": "a", "s": "s", "ô": "o", "ơ": "o", "ê": "e"}
@@ -2535,9 +2580,7 @@ def main():
                 elif policy.body_pose_mode:
                     policy.bump_body("pitch", -policy.body_cmd_step_angle)
                 else:
-                    cur_vx = 0.08 if abs(policy.nominal_vel_x) < 0.04 and not args.roller else policy.nominal_vel_x
-                    new_ang = float(np.clip(policy.nominal_vel_ang - policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang))
-                    policy.set_vel_cmd(cur_vx, policy.nominal_vel_y, new_ang)
+                    steer_walking(-1.0)
             elif key == "left":
                 if policy.head_mode:
                     policy.head_offset[2] = np.clip(policy.head_offset[2] + policy.head_step, -policy.head_max, policy.head_max)
@@ -2546,14 +2589,10 @@ def main():
                 elif policy.body_pose_mode:
                     policy.bump_body("pitch", policy.body_cmd_step_angle)
                 else:
-                    cur_vx = 0.08 if abs(policy.nominal_vel_x) < 0.04 and not args.roller else policy.nominal_vel_x
-                    new_ang = float(np.clip(policy.nominal_vel_ang + policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang))
-                    policy.set_vel_cmd(cur_vx, policy.nominal_vel_y, new_ang)
+                    steer_walking(+1.0)
             elif key == "d":
                 if not policy.head_mode and not policy.body_pose_mode:
-                    cur_vx = 0.08 if abs(policy.nominal_vel_x) < 0.04 and not args.roller else policy.nominal_vel_x
-                    new_ang = float(np.clip(policy.nominal_vel_ang - policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang))
-                    policy.set_vel_cmd(cur_vx, policy.nominal_vel_y, new_ang)
+                    steer_walking(-1.0)
             elif key == " ":
                 if policy.head_mode:
                     policy.head_offset[:] = 0.0
@@ -2598,9 +2637,7 @@ def main():
                 if policy.behavior_sessions.get("kick_right") is not None:
                     policy.trigger_behavior("kick_right")
                 else:
-                    cur_vx = 0.08 if abs(policy.nominal_vel_x) < 0.04 and not args.roller else policy.nominal_vel_x
-                    new_ang = float(np.clip(policy.nominal_vel_ang - policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang))
-                    policy.set_vel_cmd(cur_vx, policy.nominal_vel_y, new_ang)
+                    steer_walking(-1.0)
             elif key == "r":
                 policy.trigger_behavior("roulade")
             elif key == "u":
@@ -2627,9 +2664,7 @@ def main():
                 elif policy.body_pose_mode:
                     policy.bump_body("roll", policy.body_cmd_step_angle)
                 else:
-                    cur_vx = 0.08 if abs(policy.nominal_vel_x) < 0.04 and not args.roller else policy.nominal_vel_x
-                    new_ang = float(np.clip(policy.nominal_vel_ang + policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang))
-                    policy.set_vel_cmd(cur_vx, policy.nominal_vel_y, new_ang)
+                    steer_walking(+1.0)
             elif key == "e":
                 if policy.head_mode:
                     policy.head_offset[3] = np.clip(policy.head_offset[3] - policy.head_step, -policy.head_max, policy.head_max)
@@ -2664,9 +2699,7 @@ def main():
                 if policy.stairs_session is not None and policy.walking_session is not None:
                     policy.toggle_stairs_mode()
                 else:
-                    cur_vx = 0.08 if abs(policy.nominal_vel_x) < 0.04 and not args.roller else policy.nominal_vel_x
-                    new_ang = float(np.clip(policy.nominal_vel_ang + policy.vel_step_ang, -policy.vel_max_ang, policy.vel_max_ang))
-                    policy.set_vel_cmd(cur_vx, policy.nominal_vel_y, new_ang)
+                    steer_walking(+1.0)
             elif key == "c":
                 policy.toggle_heading_lock()
             elif key == "v":
@@ -2720,8 +2753,8 @@ def main():
     print("  [ Velocity mode (default) ]")
     print("  UP arrow / W / I: walk forward / speed up (+0.04 m/s)")
     print("  DOWN arrow / S:   slow down / walk backward (-0.05 m/s)")
-    print("  LEFT arrow / A:   turn left (+0.18 rad/s)")
-    print("  RIGHT arrow / D:  turn right (-0.18 rad/s)")
+    print("  LEFT arrow / A:   rẽ trái — dịch hướng đi +10° (Heading-Lock bám hướng mới, đi thẳng trở lại)")
+    print("  RIGHT arrow / D:  rẽ phải — dịch hướng đi -10° (Heading-Lock bám hướng mới, đi thẳng trở lại)")
     print("  Z / E:            strafe sideways left / right (+/-0.04 m/s)")
     print("  SPACE:            stop / stand balance (zero all commands)")
     print("  BACKSPACE / 0:    reset robot to starting position")
@@ -2732,7 +2765,7 @@ def main():
     print("  , / .:            dời mục tiêu sang trái / phải (trục Y ±0.25m)")
     print("  - / _:            giảm tốc độ bước đi (-0.02 m/s)")
     print("  + / =:            tăng tốc độ bước đi (+0.02 m/s)")
-    print("  C:                toggle Heading-Lock (giữ tuyệt đối hướng đi thẳng/lùi)")
+    print("  C:                toggle Heading-Lock (MẶC ĐỊNH BẬT: đi thẳng tuyệt đối như chế độ tự chạy; tắt = rẽ kiểu yaw-rate cũ)")
     print("  O:                toggle Camera Auto-Focus/Tracking on/off (camera tự dõi theo robot)")
     print("  T:                toggle policy inference on/off (paused = motors hold last target)")
     print("  F:                Auto-Fetch: ném bóng vào sân và robot tự chạy tới gắp về (bấm F lần nữa để dừng)")

@@ -1,0 +1,17 @@
+# Binary assets — must never be text-diffed (rsl_rl logger crashes on
+# non-UTF-8 diff bytes, e.g. regenerated Argon PDFs/PNGs)
+*.pdf binary
+*.png binary
+*.gif binary
+*.jpg binary
+*.jpeg binary
+*.bmp binary
+*.mp4 binary
+*.step binary
+*.stp binary
+*.stl binary
+*.obj binary
+*.onnx binary
+*.pt binary
+*.npz binary
+*.zip binary

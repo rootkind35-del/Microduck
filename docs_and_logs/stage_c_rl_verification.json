@@ -1,6 +1,6 @@
 {
   "stage": "Stage C - Newton / Isaac Lab & MuJoCo Warp RL Execution",
-  "generated_at": "2026-10-23T15:22:26.419627+00:00",
+  "generated_at": "2026-10-23T17:48:06.161846+00:00",
   "isaaclab_newton_spec": {
     "task_id": "Mjlab-StairsClimb-MicroDuck",
     "physics_engine": "NVIDIA_Warp_Newton_MJWarp",

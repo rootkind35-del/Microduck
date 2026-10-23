@@ -1,7 +1,7 @@
 ISO-10303-21;
 HEADER;
 FILE_DESCRIPTION(('Argon Parametric CAD Assembly: nc_high_stairs_course'), '2;1');
-FILE_NAME('nc_high_stairs_course.step', '2026-10-23T15:22:44', ('Argon Architect'), ('Microduck Sim2Real'), 'Argon-STEP-1.0', 'Argon-Parametric-CAD', '');
+FILE_NAME('nc_high_stairs_course.step', '2026-10-23T17:47:53', ('Argon Architect'), ('Microduck Sim2Real'), 'Argon-STEP-1.0', 'Argon-Parametric-CAD', '');
 FILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));
 ENDSEC;
 DATA;
