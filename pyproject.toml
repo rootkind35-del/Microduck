@@ -54,6 +54,10 @@ train = "mjlab_microduck.train_cli:main"
 # Serve a simulated body to the real `robotd` — see sim/body_server.py.
 duck-body = "mjlab_microduck.sim.body_server:main"
 publish = "mjlab_microduck.publish.cli:main"
+# RTX Control Center — hệ thống multi mini model (matrix / pipeline / dashboard).
+rtx-pipeline = "mjlab_microduck.rtx.pipeline:main"
+rtx-dashboard = "mjlab_microduck.rtx.dashboard:main"
+rtx-matrix = "mjlab_microduck.rtx.matrix:main"
 [tool.ruff]
 src = ["src"]  # Helpful for recognizing first-party imports.
 indent-width = 4

@@ -1,0 +1,152 @@
+<mujoco model="scene_stairs_allcollisions">
+    <include file="robot_allcollisions.xml" />
+
+    <visual>
+        <headlight diffuse="0.72 0.74 0.78" ambient="0.34 0.36 0.40" specular="0.35 0.35 0.40" />
+        <quality shadowsize="4096" offsamples="4" />
+        <map znear="0.01" zfar="25.0" force="0.1" fogstart="4.0" fogend="14.0" />
+        <rgba haze="0.10 0.16 0.24 1" />
+        <global azimuth="145" elevation="-22" offwidth="1280" offheight="720" />
+    </visual>
+
+    <asset>
+        <texture type="skybox" builtin="gradient" rgb1="0.16 0.28 0.44" rgb2="0.03 0.05 0.10" width="512" height="3072" />
+        <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.18 0.22 0.28" rgb2="0.12 0.15 0.20" markrgb="0.42 0.52 0.64" width="512" height="512" />
+        <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="6 6" reflectance="0.16" specular="0.25" shininess="0.4" />
+
+        <!-- High stairs materials (Studio Architectural Specular Finish) -->
+        <material name="mat_stair_25" rgba="0.28 0.52 0.76 1.0" reflectance="0.22" specular="0.45" shininess="0.6" roughness="0.3" />
+        <material name="mat_landing_1" rgba="0.18 0.68 0.46 1.0" reflectance="0.25" specular="0.50" shininess="0.6" roughness="0.3" />
+        <material name="mat_stair_30" rgba="0.78 0.56 0.22 1.0" reflectance="0.22" specular="0.45" shininess="0.6" roughness="0.3" />
+        <material name="mat_landing_2" rgba="0.16 0.64 0.60 1.0" reflectance="0.25" specular="0.50" shininess="0.6" roughness="0.3" />
+        <material name="mat_stair_35" rgba="0.86 0.32 0.24 1.0" reflectance="0.24" specular="0.48" shininess="0.6" roughness="0.3" />
+        <material name="mat_summit" rgba="0.94 0.76 0.18 1.0" reflectance="0.32" specular="0.65" shininess="0.75" roughness="0.2" />
+        <material name="target_site_mat" rgba="0.10 0.94 0.42 0.90" emission="0.35" reflectance="0.5" specular="0.7" />
+        <material name="mat_rail_glow" rgba="0.14 0.80 0.98 0.85" emission="0.35" specular="0.6" />
+    </asset>
+
+    <worldbody>
+        <light name="studio_key" pos="1.2 -1.0 2.8" dir="-0.20 0.35 -0.90" diffuse="0.82 0.80 0.76" specular="0.42 0.42 0.42" directional="true" castshadow="true" />
+        <light name="studio_fill" pos="1.0 1.1 2.2" dir="-0.15 -0.40 -0.90" diffuse="0.38 0.44 0.54" specular="0.18 0.18 0.22" directional="true" castshadow="false" />
+        <camera name="overview_track" pos="-0.28 -0.82 0.50" xyaxes="0.82 -0.57 0.0 0.24 0.35 0.90" fovy="50" />
+        <geom name="floor" size="0 0 0.05" pos="0 0 0" type="plane" material="groundplane" />
+        <!-- Architectural LED Side Rails & Summit Trophy Gate (Purely Visual Sites: 0 collision overhead) -->
+        <site name="rail_left_f1" type="box" pos="1.30 0.265 0.062" size="1.05 0.006 0.008" euler="0 -0.052 0" material="mat_rail_glow" />
+        <site name="rail_right_f1" type="box" pos="1.30 -0.265 0.062" size="1.05 0.006 0.008" euler="0 -0.052 0" material="mat_rail_glow" />
+        <site name="summit_pillar_left" type="cylinder" pos="2.34 0.22 0.21" size="0.012 0.10" material="mat_summit" />
+        <site name="summit_pillar_right" type="cylinder" pos="2.34 -0.22 0.21" size="0.012 0.10" material="mat_summit" />
+        <site name="summit_arch_top" type="box" pos="2.34 0.0 0.31" size="0.014 0.24 0.012" material="target_site_mat" />
+
+        <!-- ================================================================= -->
+        <!-- FLIGHT 1: 1.0cm Risers (x: 0.30m -> 0.66m, Elevation: 0 -> 3.0cm)  -->
+        <!-- ================================================================= -->
+        <geom name="stair_1_1" type="box" pos="0.36 0 0.0050" size="0.06 0.25 0.0050"
+              material="mat_stair_25" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <geom name="stair_1_2" type="box" pos="0.48 0 0.0100" size="0.06 0.25 0.0100"
+              material="mat_stair_25" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <geom name="stair_1_3" type="box" pos="0.60 0 0.0150" size="0.06 0.25 0.0150"
+              material="mat_stair_25" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+
+        <!-- LANDING PLATFORM 1: (x: 0.66m -> 1.02m, Height: 3.0cm) -->
+        <geom name="landing_1" type="box" pos="0.84 0 0.0150" size="0.18 0.25 0.0150"
+              material="mat_landing_1" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <site name="site_landing_1" pos="0.84 0 0.035" type="cylinder" size="0.03 0.005" material="target_site_mat" />
+
+        <!-- ================================================================== -->
+        <!-- FLIGHT 2: 1.25cm Risers (x: 1.02m -> 1.38m, Elevation: 3.0cm -> 6.75cm) -->
+        <!-- ================================================================== -->
+        <geom name="stair_2_1" type="box" pos="1.08 0 0.02125" size="0.06 0.25 0.02125"
+              material="mat_stair_30" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <geom name="stair_2_2" type="box" pos="1.20 0 0.02750" size="0.06 0.25 0.02750"
+              material="mat_stair_30" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <geom name="stair_2_3" type="box" pos="1.32 0 0.03375" size="0.06 0.25 0.03375"
+              material="mat_stair_30" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+
+        <!-- LANDING PLATFORM 2: (x: 1.38m -> 1.74m, Height: 6.75cm) -->
+        <geom name="landing_2" type="box" pos="1.56 0 0.03375" size="0.18 0.25 0.03375"
+              material="mat_landing_2" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <site name="site_landing_2" pos="1.56 0 0.0725" type="cylinder" size="0.03 0.005" material="target_site_mat" />
+
+        <!-- ================================================================== -->
+        <!-- FLIGHT 3: 1.50cm Risers (x: 1.74m -> 2.10m, Elevation: 6.75cm -> 11.25cm) -->
+        <!-- ================================================================== -->
+        <geom name="stair_3_1" type="box" pos="1.80 0 0.04125" size="0.06 0.25 0.04125"
+              material="mat_stair_35" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <geom name="stair_3_2" type="box" pos="1.92 0 0.04875" size="0.06 0.25 0.04875"
+              material="mat_stair_35" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <geom name="stair_3_3" type="box" pos="2.04 0 0.05625" size="0.06 0.25 0.05625"
+              material="mat_stair_35" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+
+        <!-- TOP SUMMIT PLATFORM: (x: 2.10m -> 2.58m, Height: 11.25cm) -->
+        <geom name="landing_summit" type="box" pos="2.34 0 0.05625" size="0.24 0.25 0.05625"
+              material="mat_summit" condim="3" friction="1.2 0.01 0.001" solref="0.02 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+        <site name="site_summit" pos="2.34 0 0.1175" type="cylinder" size="0.04 0.005" material="target_site_mat" />
+    </worldbody>
+
+    <keyframe>
+        <key name="INIT" qpos="0 0 0.12 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0" ctrl="0 0 0 0 0 0 0 0 0 0 0 0 0 0" />
+        <key name="STAND" qpos="
+            0 0 0.125 1 0 0 0
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984"
+            ctrl="
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984" />
+        <key name="SPAWN_STAIRS_25" qpos="
+            0.48 0 0.145 1 0 0 0
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984"
+            ctrl="
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984" />
+        <key name="SPAWN_LANDING_1" qpos="
+            0.84 0 0.155 1 0 0 0
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984"
+            ctrl="
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984" />
+        <key name="SPAWN_STAIRS_30" qpos="
+            1.20 0 0.180 1 0 0 0
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984"
+            ctrl="
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984" />
+        <key name="SPAWN_LANDING_2" qpos="
+            1.56 0 0.1925 1 0 0 0
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984"
+            ctrl="
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984" />
+        <key name="SPAWN_STAIRS_35" qpos="
+            1.92 0 0.2225 1 0 0 0
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984"
+            ctrl="
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984" />
+        <key name="SPAWN_SUMMIT" qpos="
+            2.34 0 0.2375 1 0 0 0
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984"
+            ctrl="
+            0 -0.087266 -0.457924 -0.004940 0.452984
+            0.349066 0.349066 0 0
+            0 0.087266 0.457924 0.004940 -0.452984" />
+    </keyframe>
+</mujoco>

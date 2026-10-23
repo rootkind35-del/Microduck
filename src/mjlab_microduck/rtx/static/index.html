@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Microduck · RTX Control Center</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="logo">🦆</span>
+    <div>
+      <h1>MICRODUCK · RTX CONTROL CENTER</h1>
+      <p>Hệ thống Multi Mini Model — mỗi hành vi một model nhỏ · hợp đồng obs 61D chung · hot-swap trên robot</p>
+    </div>
+  </div>
+  <div class="gpu-badge" id="gpu-badge">
+    <span class="dot"></span><span id="gpu-text">GPU —</span>
+  </div>
+</header>
+
+<section class="pipeline">
+  <div class="stage" id="stage-train">
+    <div class="stage-head"><span class="stage-num">1</span><div><h2>HUẤN LUYỆN</h2><p>PPO · MuJoCo Warp · 1024 envs · RTX 4060</p></div></div>
+    <div id="train-live" class="stage-body"><p class="muted">Không có tiến trình train nào đang chạy.</p></div>
+    <button class="btn wide" data-action="queue">▶ Queue train các model còn thiếu</button>
+  </div>
+  <div class="stage" id="stage-twin">
+    <div class="stage-head"><span class="stage-num">2</span><div><h2>DIGITAL TWIN</h2><p>CPU MuJoCo · động cơ BAM M6 như robot thật</p></div></div>
+    <div id="twin-live" class="stage-body"><p class="muted">Chạy [Demo] trên một model ở bảng dưới để xuất GIF.</p></div>
+  </div>
+  <div class="stage" id="stage-deploy">
+    <div class="stage-head"><span class="stage-num">3</span><div><h2>TRIỂN KHAI</h2><p>ONNX normalizer-baked · manifest schema-2</p></div></div>
+    <div id="deploy-live" class="stage-body"></div>
+  </div>
+</section>
+
+<section class="matrix-sec">
+  <div class="sec-head">
+    <h2>MATRIX MODEL <span id="matrix-count" class="chip"></span></h2>
+    <div class="sec-actions">
+      <button class="btn ghost" data-action="scan">↻ Quét lại</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table id="matrix-table">
+      <thead>
+        <tr>
+          <th>Nhóm</th><th>Model</th><th class="col-progress">Tiến độ train</th>
+          <th>ONNX</th><th>Twin</th><th>Kết luận digital twin</th><th>Thao tác</th>
+        </tr>
+      </thead>
+      <tbody id="matrix-body"></tbody>
+    </table>
+  </div>
+</section>
+
+<section class="log-sec">
+  <div class="sec-head"><h2>NHẬT KÝ TRAIN</h2><span class="muted" id="log-file"></span></div>
+  <pre id="train-log">—</pre>
+</section>
+
+<footer>
+  <span>uv run rtx-dashboard · uv run rtx-pipeline &lt;scan|smoke|train|export|demo|queue|live&gt;</span>
+  <span id="last-update"></span>
+</footer>
+
+<div id="toast"></div>
+<div id="modal" hidden>
+  <div class="modal-card">
+    <img id="modal-img" alt="digital twin">
+    <div id="modal-cap"></div>
+    <button class="btn" onclick="document.getElementById('modal').hidden=true">Đóng</button>
+  </div>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>
