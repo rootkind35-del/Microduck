@@ -103,7 +103,7 @@ _FAMILIES: tuple[ModelFamily, ...] = (
         key="spin", label="Xoay tại chỗ (spin, bánh xe)", group="experimental",
         task_id="Mjlab-Spin-Flat-MicroDuck", exp_dir="spin",
         target_iters=8000, twin_kind="spin", scene="src/mjlab_microduck/robot/microduck/scene_rollers.xml",
-        duration_s=5.0,
+        duration_s=6.0,
         note="Task spin train trên robot ROLLERS — chưa từng train local",
     ),
     # --- Nhóm thí nghiệm: bánh xe / biến thể, chưa thuộc bộ deploy ---

@@ -88,6 +88,47 @@ def test_stairs_kind_keeps_testbench_recipe():
     assert spec.get("assist") == "stairs_reflex"
 
 
+def test_spin_command_uses_phase_encoding():
+    """spin nhận mã hóa pha [cos(2πφ), sin(2πφ)] trong slot twist (như
+    ground_pick) — KHÔNG phải lệnh wz thô (lỗi thật 2026-10-24: wz=1.0)."""
+    import mujoco  # noqa: F401 — đảm bảo môi trường có mujoco
+
+    period = 4.0  # mdp.SPIN_PERIOD
+    c0 = dt.KINDS["spin"]["cmd"](0.0, 6.0)
+    assert np.allclose(c0[:3], [1.0, 0.0, 0.0], atol=1e-6)
+    c_quarter = dt.KINDS["spin"]["cmd"](1.0, 6.0)
+    assert np.allclose(c_quarter[:3], [0.0, 1.0, 0.0], atol=1e-6)
+    # Chu kỳ lặp lại sau 4 s
+    assert np.allclose(dt.KINDS["spin"]["cmd"](period, 6.0)[:3], c0[:3], atol=1e-6)
+
+
+def test_servo_joint_addrs_plain_and_rollers():
+    """Obs phải đọc joint servo theo địa chỉ model: model thường = slice liền
+    kề; model rollers có 4 wheel `passive_*` XEN KẼ nên slice cứng là sai
+    (invariant AGENTS.md: không hardcode joint index)."""
+    import mujoco
+
+    plain = mujoco.MjModel.from_xml_path(
+        str(REPO_ROOT / "src/mjlab_microduck/robot/microduck/scene.xml"))
+    qa, da = dt.servo_joint_addrs(plain)
+    assert qa == list(range(7, 21)) and da == list(range(6, 20))
+
+    rollers = mujoco.MjModel.from_xml_path(
+        str(REPO_ROOT / "src/mjlab_microduck/robot/microduck/scene_rollers.xml"))
+    qa_r, da_r = dt.servo_joint_addrs(rollers)
+    assert len(qa_r) == 14 and len(da_r) == 14
+    # Root freejoint + 4 wheel passive bị loại
+    assert rollers.njnt == 19  # 1 free + 14 servo + 4 wheel
+    assert qa_r != list(range(7, 21))  # wheel xen kẽ → không liền kề
+    # Đúng 14 joint không phải passive/free, theo thứ tự model
+    for j in range(rollers.njnt):
+        name = mujoco.mj_id2name(rollers, mujoco.mjtObj.mjOBJ_JOINT, j) or ""
+        adr = rollers.jnt_qposadr[j]
+        included = adr in qa_r
+        assert included == (not name.startswith("passive_")
+                            and rollers.jnt_type[j] != mujoco.mjtJoint.mjJNT_FREE), name
+
+
 def test_matrix_scan_writes_and_classifies(tmp_path, monkeypatch):
     from mjlab_microduck.rtx import matrix as mtx
     from mjlab_microduck.rtx.registry import LOGS_ROOT, RTX_STATE_DIR

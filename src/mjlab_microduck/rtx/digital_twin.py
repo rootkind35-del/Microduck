@@ -67,6 +67,17 @@ def _ground_pick_cmd(t: float, duration: float, period: float = 2.8) -> np.ndarr
     return cmd
 
 
+def _spin_cmd(t: float, duration: float, period: float = 4.0) -> np.ndarray:
+    """spin nhận MÃ HÓA PHA trong slot twist (như ground_pick), không phải lệnh
+    wz thô: [cos(2πφ), sin(2πφ), 0], φ = t/SPIN_PERIOD (4 s/chu kỳ). Envelope
+    bên trong policy tự tạo gia tốc→đề→phanh (mdp.spin_rate_by_phase)."""
+    phase = (t / period) % 1.0
+    cmd = _zero13()
+    cmd[0] = float(np.cos(2 * np.pi * phase))
+    cmd[1] = float(np.sin(2 * np.pi * phase))
+    return cmd
+
+
 # kind → hàm lệnh (t, duration) → lệnh 13D; khởi tạo & mô tả
 # vx walk = 0.35: các policy đi bộ cũ học "vx nhỏ = đứng" (zero_command_prob
 # lúc train) — đo thực nghiệm: 0.10 đứng im, 0.35 đi 1.2 m / 8 s thẳng đứng.
@@ -95,7 +106,7 @@ KINDS: dict[str, dict] = {
     "ball_kick":   dict(cmd=lambda t, d: _zero13(),                 spawn="stand",
                         post=_place_ball_right_toe),
     "fetch":       dict(cmd=lambda t, d: _twist13(0.25),            spawn="stand"),
-    "spin":        dict(cmd=lambda t, d: _twist13(0.0, 0.0, 1.0),   spawn="stand"),
+    "spin":        dict(cmd=_spin_cmd,                              spawn="stand"),
     # stairs: tái tạo đúng công thức đã chứng minh của testbench
     # (scripts/test_stairs_frame_by_frame.py): settle giữ HOME 15 bước +
     # reflex "foot leveling" khi tới gần bậc — leo bằng walking policy.
@@ -148,10 +159,31 @@ def compute_projected_gravity(quat) -> np.ndarray:
     ], dtype=np.float32)
 
 
-def build_61d_obs(model, data, last_action, command13):
+def servo_joint_addrs(model) -> tuple[list[int], list[int]]:
+    """Địa chỉ qpos/dof của các joint servo (không phải `passive_*`), theo thứ
+    tự model — invariant của repo: không hardcode index joint, model rollers
+    có wheel thụ động XEN KẼ nên qpos[7:21] là sai. Trên model thường kết quả
+    trùng với slice liền kề (7..20 / 6..19)."""
+    qpos_adrs, dof_adrs = [], []
+    for j in range(model.njnt):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j) or ""
+        if name.startswith("passive_"):
+            continue
+        if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE:
+            continue  # root freejoint — không phải servo
+        qpos_adrs.append(int(model.jnt_qposadr[j]))
+        dof_adrs.append(int(model.jnt_dofadr[j]))
+    return qpos_adrs, dof_adrs
+
+
+def build_61d_obs(model, data, last_action, command13,
+                  qpos_adrs=None, dof_adrs=None):
     """61D obs — y hệt scripts/infer_stairs.build_61d_observation (đã chứng minh
     trên testbench + robot thật): ang-vel từ sensor `imu_ang_vel`, quat từ body
-    `trunk_base` (xquat), projected gravity cùng công thức."""
+    `trunk_base` (xquat), projected gravity cùng công thức. Joint đọc theo
+    địa chỉ servo (mặc định tự resolve theo tên)."""
+    if qpos_adrs is None or dof_adrs is None:
+        qpos_adrs, dof_adrs = servo_joint_addrs(model)
     imu_ang_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SENSOR, "imu_ang_vel")
     if imu_ang_id >= 0:
         adr = model.sensor_adr[imu_ang_id]
@@ -167,8 +199,8 @@ def build_61d_obs(model, data, last_action, command13):
         base_quat = base_quat / n
 
     proj_grav = compute_projected_gravity(base_quat)
-    joint_pos = np.array(data.qpos[7:21], dtype=np.float32) - DEFAULT_JOINT_POS
-    joint_vel = np.array(data.qvel[6:20], dtype=np.float32)
+    joint_pos = np.array([data.qpos[a] for a in qpos_adrs], dtype=np.float32) - DEFAULT_JOINT_POS
+    joint_vel = np.array([data.qvel[a] for a in dof_adrs], dtype=np.float32)
     obs = np.concatenate([
         ang_vel_b, proj_grav, joint_pos, joint_vel,
         np.asarray(last_action, dtype=np.float32), np.asarray(command13, dtype=np.float32),
@@ -435,7 +467,8 @@ def run_twin(key: str, onnx_path: Path, out_dir: Path,
         ok = dist >= 0.15  # đi về phía bóng; khoảng cách bóng cố định
         verdict = f"tiến {dist:.2f} m về phía bóng"
     elif kind == "spin":
-        ok = abs(math.degrees(yaw_total)) >= 0.8 * 360
+        # 1 chu kỳ envelope (4 s) = 2.1 * SPIN_RATE_MAX = 6.3 rad ≈ 361°
+        ok = abs(math.degrees(yaw_total)) >= 0.8 * 361
         verdict = f"xoay {math.degrees(yaw_total):.0f}° quanh trục đứng"
     else:
         ok, verdict = False, "kind lạ"

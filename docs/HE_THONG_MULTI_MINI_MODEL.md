@@ -132,7 +132,23 @@ gây kết quả twin sai:
 6. **GPU chỉ chạy một train**: `queue` chờ tiến trình `bin/train Mjlab-*` sống
    thoát mới mở stage kế tiếp; dashboard chặn hành động trùng (HTTP 409).
 
-## 6. Cấu trúc code
+## 6. Đường train trên Colab (T4, phiên 5 h 30)
+
+Notebook `notebooks/train_spin_colab.ipynb` train model còn thiếu (spin) trên
+Google Colab T4 15 GB, phiên 5 h 30:
+
+- Smoke test 64 envs × 5 iters bắt buộc trước train (quy tắc repo).
+- Train theo **chunk 500 iters + resume**: Colab ngắt giữa chừng chỉ mất tối
+  đa 1 chunk; chạy lại notebook tự khôi phục checkpoint từ Drive.
+- Sau mỗi chunk chép checkpoint/logs lên `Drive/Microduck_RTX/spin/`.
+- Khi hết ngân sách (còn 30 phút): tự dừng train → export ONNX baked → chạy
+  digital twin spin ngay trên Colab → lưu full logs + model + GIF về Drive và
+  tải ONNX về máy.
+
+Yêu cầu: nhánh `RTX` đã push lên GitHub (`git push origin RTX`) vì notebook
+clone từ đó.
+
+## 7. Cấu trúc code
 
 ```
 src/mjlab_microduck/rtx/
